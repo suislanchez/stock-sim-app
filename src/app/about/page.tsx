@@ -33,8 +33,8 @@ export default function AboutPage() {
           <div className="flex items-center gap-4 mb-2">
             <div className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-2xl font-bold text-white">L</div>
             <div>
-              <p className="text-white font-medium">Luis (Placeholder)</p>
-              <p className="text-gray-400 text-sm">Full Stack Developer & Finance Enthusiast</p>
+              <p className="text-white font-medium">Luis Sanchez</p>
+              <p className="text-gray-400 text-sm">Dev.</p>
             </div>
           </div>
           <p className="text-gray-400 mb-4">
