@@ -1,4 +1,4 @@
-# SimuTrader AI - All of stocks and crypto, your trusted lcoal simulator
+# SimuTrader AI - All of stocks and crypto, your trusted real time simulator
 
 ![SimuTrader Preview](public/simu-preview.png)
 
