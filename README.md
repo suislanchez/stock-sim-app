@@ -131,4 +131,3 @@ Contributions
 
 PRs and feedback are welcome. If you’re building something similar or want to add features, feel free to fork or reach out.
 
-Let me know if you want a hosted preview image (for better markdown rendering on GitHub), or if you want help setting up `.env` configs or API key instructions next.
