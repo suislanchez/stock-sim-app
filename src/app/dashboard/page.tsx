@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { useRouter } from "next/navigation";
 import { fetchStock } from "../../lib/fetchStock";
@@ -397,7 +397,72 @@ const sectionInfo = {
 };
 
 // Add this after the InfoBubble component and before the DashboardPage component
-const COLORS = ['#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#EF4444', '#6366F1', '#14B8A6'];
+const COLORS = [
+  '#7DD3FC', // pastel blue
+  '#A5B4FC', // pastel indigo
+  '#C4B5FD', // pastel purple
+  '#F9A8D4', // pastel pink
+  '#FCD34D', // pastel yellow
+  '#86EFAC', // pastel green
+  '#FCA5A5', // pastel red
+  '#94A3B8'  // pastel gray
+];
+
+const sentimentColors = {
+  bullish: 'bg-green-900/50 text-green-400 border-green-500',
+  somewhat_bullish: 'bg-green-800/50 text-green-300 border-green-400',
+  neutral: 'bg-gray-800/50 text-gray-300 border-gray-400',
+  somewhat_bearish: 'bg-red-800/50 text-red-300 border-red-400',
+  bearish: 'bg-red-900/50 text-red-400 border-red-500'
+} as const;
+
+const sentimentLabels = {
+  bullish: 'Bullish',
+  somewhat_bullish: 'Somewhat Bullish',
+  neutral: 'Neutral',
+  somewhat_bearish: 'Somewhat Bearish',
+  bearish: 'Bearish'
+} as const;
+
+const CompactNewsCard = ({ items }: { items: NewsItem[] }) => {
+  return (
+    <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700/50 p-4 h-[405px] overflow-y-auto">
+      <div className="space-y-4">
+        {items.slice(0, 15).map((item, index) => (
+          <div key={index} className="p-3 hover:bg-gray-700/50 rounded-lg transition-colors">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 mb-2">
+                <span className={`px-2 py-1 rounded-full text-xs font-medium border ${sentimentColors[item.sentiment]}`}>
+                  {sentimentLabels[item.sentiment]}
+                </span>
+                <span className="text-xs text-gray-400">•</span>
+                <span className="text-xs text-gray-400">{item.source}</span>
+              </div>
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block group"
+              >
+                <h3 className="text-base font-semibold text-white mb-2 line-clamp-2 group-hover:text-green-400 transition-colors">{item.title}</h3>
+                <p className="text-sm text-gray-300 line-clamp-3 leading-relaxed">{item.summary}</p>
+              </a>
+              {item.tickers && item.tickers.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {item.tickers.map((ticker, i) => (
+                    <span key={i} className="px-2 py-0.5 bg-gray-700/50 rounded text-xs text-gray-300">
+                      {ticker}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 const InfoBubble = ({ title, content }: { title: string; content: string }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -507,7 +572,7 @@ const PortfolioPieChart = ({ portfolio, loading }: { portfolio: PortfolioItem[],
 
   if (loading) {
     return (
-      <div className="bg-gray-800 p-4 rounded-lg flex items-center justify-center">
+      <div className="flex items-center justify-center">
         <div className="w-64 h-64 flex-shrink-0 flex items-center justify-center">
           <div className="relative">
             <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-green-500"></div>
@@ -521,8 +586,8 @@ const PortfolioPieChart = ({ portfolio, loading }: { portfolio: PortfolioItem[],
   }
 
   return (
-    <div className="bg-gray-800 p-4 rounded-lg flex items-center justify-center">
-      <div className="w-[18rem] h-[18rem] flex-shrink-0 pie-chart-container relative">
+    <div className="flex items-center justify-start">
+      <div className="w-[12rem] h-[12rem] flex-shrink-0 pie-chart-container relative">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <defs>
@@ -536,8 +601,8 @@ const PortfolioPieChart = ({ portfolio, loading }: { portfolio: PortfolioItem[],
               data={data}
               cx="50%"
               cy="50%"
-              innerRadius={60}
-              outerRadius={120}
+              innerRadius={45}
+              outerRadius={90}
               paddingAngle={2}
               dataKey="value"
               stroke="none"
@@ -577,10 +642,11 @@ const PortfolioPieChart = ({ portfolio, loading }: { portfolio: PortfolioItem[],
               y="50%"
               textAnchor="middle"
               dominantBaseline="middle"
-              className="text-white text-lg font-bold"
+              className="text-white text-base font-bold"
               style={{
                 opacity: animationPhase === 'initial' ? 0 : 1,
                 transition: 'opacity 0.5s ease-out',
+                fill: '#FFFFFF'
               }}
             >
               ${totalValue.toLocaleString()}
@@ -591,23 +657,23 @@ const PortfolioPieChart = ({ portfolio, loading }: { portfolio: PortfolioItem[],
                   const data = payload[0].payload;
                   const percentage = ((data.value / totalValue) * 100).toFixed(1);
                   return (
-                    <div className="bg-gray-900/95 backdrop-blur-sm p-4 rounded-xl border border-gray-700/50 shadow-xl transform -translate-y-28 z-50 min-w-[200px]">
+                    <div className="bg-gray-900/95 backdrop-blur-sm p-3 rounded-xl border border-gray-700/50 shadow-xl transform -translate-y-24 z-50 min-w-[180px]">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-white font-semibold text-lg">{data.name}</span>
-                        <span className="text-gray-400 text-sm">{percentage}%</span>
+                        <span className="text-white font-semibold text-base">{data.name}</span>
+                        <span className="text-gray-400 text-xs">{percentage}%</span>
                       </div>
-                      <div className="space-y-1.5">
+                      <div className="space-y-1">
                         <div className="flex justify-between items-center">
-                          <span className="text-gray-400 text-sm">Value</span>
-                          <span className="text-white font-medium">${data.value.toLocaleString()}</span>
+                          <span className="text-gray-400 text-xs">Value</span>
+                          <span className="text-white text-xs font-medium">${data.value.toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between items-center">
-                          <span className="text-gray-400 text-sm">Shares</span>
-                          <span className="text-white font-medium">${data.shares.toLocaleString()}</span>
+                          <span className="text-gray-400 text-xs">Shares</span>
+                          <span className="text-white text-xs font-medium">${data.shares.toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between items-center">
-                          <span className="text-gray-400 text-sm">Return</span>
-                          <span className={`font-medium ${data.gainLossPercentage >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          <span className="text-gray-400 text-xs">Return</span>
+                          <span className={`text-xs font-medium ${data.gainLossPercentage >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                             {data.gainLossPercentage >= 0 ? '+' : ''}{data.gainLossPercentage?.toFixed(2)}%
                           </span>
                         </div>
@@ -621,25 +687,29 @@ const PortfolioPieChart = ({ portfolio, loading }: { portfolio: PortfolioItem[],
           </PieChart>
         </ResponsiveContainer>
       </div>
-      <div className="ml-12 space-y-3 min-w-[2px]">
+      <div className="ml-6 space-y-0.5 min-w-[2px] flex flex-col">
+        <div className="flex items-center mb-1">
+          <span className="text-xs text-gray-400 mr-1">Tickers</span>
+          <InfoBubble title="Portfolio Tickers" content="These are the stock symbols in your portfolio. Each dot and symbol shows your allocation and percentage of total value." />
+        </div>
         {data.map((entry, index) => {
           const percentage = ((entry.value / totalValue) * 100).toFixed(1);
           return (
             <div 
               key={entry.name}
-              className="flex items-center space-x-2 cursor-pointer group"
+              className="flex items-center space-x-1 cursor-pointer group"
               onMouseEnter={() => setActiveIndex(index)}
               onMouseLeave={() => setActiveIndex(null)}
             >
               <div 
-                className="w-3 h-3 rounded-full transition-all duration-150"
+                className="w-1.5 h-1.5 rounded-full transition-all duration-150"
                 style={{ 
                   backgroundColor: COLORS[index % COLORS.length],
                   transform: activeIndex === index ? 'scale(1.2)' : 'scale(1)',
                 }}
               />
-              <span className="text-gray-300 text-sm group-hover:text-white transition-colors duration-150">{entry.name}</span>
-              <span className="text-gray-400 text-sm group-hover:text-gray-300 transition-colors duration-150">{percentage}%</span>
+              <span className="text-gray-300 text-xs group-hover:text-white transition-colors duration-150">{entry.name}</span>
+              <span className="text-gray-400 text-xs group-hover:text-gray-300 transition-colors duration-150">{percentage}%</span>
             </div>
           );
         })}
@@ -748,6 +818,14 @@ export default function DashboardPage() {
   const [showSearch, setShowSearch] = useState(false);
   const [portfolioHistory, setPortfolioHistory] = useState<{ date: string; value: number }[]>([]);
   const [selectedTimeframe, setSelectedTimeframe] = useState("1M");
+  const [portfolioPage, setPortfolioPage] = useState(0);
+  const stocksPerPage = 5;
+  const pagedPortfolio = useMemo(() => {
+    const sorted = [...portfolio].sort((a, b) => (b.total_value ?? 0) - (a.total_value ?? 0));
+    const filtered = sorted.filter(item => item.symbol !== selectedStock);
+    const start = portfolioPage * stocksPerPage;
+    return filtered.slice(start, start + stocksPerPage);
+  }, [portfolio, portfolioPage, selectedStock]);
 
   // Add this effect to handle crypto mode switch
   useEffect(() => {
@@ -1939,23 +2017,6 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [isCryptoMode]);
 
-  // Update the sentiment mapping constants
-  const sentimentColors = {
-    bullish: 'bg-green-500/20 text-green-400 border-green-500/30',
-    somewhat_bullish: 'bg-green-500/10 text-green-300 border-green-500/20',
-    neutral: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
-    somewhat_bearish: 'bg-red-500/10 text-red-300 border-red-500/20',
-    bearish: 'bg-red-500/20 text-red-400 border-red-500/30'
-  } as const;
-
-  const sentimentLabels = {
-    bullish: 'Bullish',
-    somewhat_bullish: 'Somewhat Bullish',
-    neutral: 'Neutral',
-    somewhat_bearish: 'Somewhat Bearish',
-    bearish: 'Bearish'
-  } as const;
-
   // Add this helper function after the constants
   const normalizeSentiment = (sentiment: string): keyof typeof sentimentColors => {
     const normalized = sentiment.toLowerCase().replace(/\s+/g, '_');
@@ -1989,149 +2050,152 @@ export default function DashboardPage() {
   }
  
   return (
-    <div className={`flex min-h-screen ${isCryptoMode ? 'bg-gray-900' : 'bg-black'}`}>
+    <div className={`flex min-h-screen font-sans ${isCryptoMode ? 'bg-gray-900' : 'bg-black'}`}>
       {/* Side Navigation */}
-      <nav className="w-64 bg-gray-900/95 backdrop-blur-sm border-r border-gray-800/50 fixed h-full">
-        <div className="flex flex-col h-full">
-          <div className="p-4 border-b border-gray-800/50">
+      <nav className="w-48 bg-gray-900/95 backdrop-blur-sm border-r border-gray-800/50 fixed h-full flex flex-col justify-between">
+        <div>
+          <div className="p-3 border-b border-gray-800/50">
             <div className="flex items-center">
-              <img src="/logo.png" alt="SimuTrader Logo" className="w-14 h-14 rounded-full mr-3" />
-              <span className={`text-xl font-bold ${isCryptoMode ? 'crypto-text' : 'bg-gradient-to-r from-green-400 to-green-600 bg-clip-text text-transparent'}`}>SimuTrader AI</span>
+              <img src="/logo.png" alt="SimuTrader Logo" className="w-12 h-12 rounded-full mr-2" />
+              <span className="text-xl font-bold bg-gradient-to-r from-white via-gray-200 to-gray-300 bg-clip-text text-transparent relative">
+                <span className="relative z-10">SimuTrader</span>
+              </span>
             </div>
           </div>
-          <div className="flex-1 py-4">
-            <div className="space-y-2 px-4">
-              <button
-                onClick={() => setIsCryptoMode(!isCryptoMode)}
-                className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
-                  isCryptoMode 
-                    ? 'bg-green-600/80 text-white hover:bg-green-700/80' 
-                    : 'bg-purple-500 text-white hover:bg-purple-600'
-                }`}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 2v8M12 14v8M4.93 4.93l4.24 4.24M14.83 14.83l4.24 4.24M2 12h8M14 12h8M4.93 19.07l4.24-4.24M14.83 9.17l4.24-4.24"/>
-                </svg>
-                {isCryptoMode ? 'Switch to Stocks' : 'Switch to Crypto'}
-              </button>
-              <a href="/dashboard" className={`${isCryptoMode ? 'crypto-text' : 'text-gray-300'} hover:text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200 flex items-center gap-2`}>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
-                  <path d="M9 22V12h6v10"/>
-                </svg>
-                Dashboard
-              </a>
-              <a href="/about" className={`${isCryptoMode ? 'crypto-text' : 'text-gray-300'} hover:text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200 flex items-center gap-2`}>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10"/>
-                  <path d="M12 16v-4M12 8h.01"/>
-                </svg>
-                About
-              </a>
-              <a href="/portfolio" className={`${isCryptoMode ? 'crypto-text' : 'text-gray-300'} hover:text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200 flex items-center gap-2`}>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
-                  <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-                  <line x1="12" y1="22.08" x2="12" y2="12"/>
-                </svg>
-                Portfolio
-              </a>
-              <a href="/account" className={`${isCryptoMode ? 'crypto-text' : 'text-gray-300'} hover:text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200 flex items-center gap-2`}>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
-                  <circle cx="12" cy="7" r="4"/>
-                </svg>
-                Account
-              </a>
-              <a href="/settings" className={`${isCryptoMode ? 'crypto-text' : 'text-gray-300'} hover:text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200 flex items-center gap-2`}>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="3"/>
-                  <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
-                </svg>
-                Settings
-              </a>
-            </div>
+          <div className="p-3 space-y-1">
+            <a href="/dashboard" className="text-gray-300 hover:text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+              Dashboard
+            </a>
+            <a href="/futures" className="text-gray-300 hover:text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+              </svg>
+              Futures
+            </a>
+            <a href="/orders" className="text-gray-300 hover:text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              Orders
+            </a>
+            <a href="/watchlist" className="text-gray-300 hover:text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+              </svg>
+              Watchlist
+            </a>
+            <a href="/taxes" className="text-gray-300 hover:text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+              Taxes
+            </a>
+            <a href="/news" className="text-gray-300 hover:text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21H5a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2z" />
+              </svg>
+              News
+            </a>
+            <a href="/education" className="text-gray-300 hover:text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5zm0 7v-6m0 0l-7-4m7 4l7-4" />
+              </svg>
+              Education
+            </a>
+            <a href="/portfolio" className={`${isCryptoMode ? 'crypto-text' : 'text-gray-300'} hover:text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200 flex items-center gap-2`}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                <line x1="12" y1="22.08" x2="12" y2="12"/>
+              </svg>
+              Portfolio
+            </a>
           </div>
+        </div>
+        {/* Bottom Left Section */}
+        <div className="p-3 border-t border-gray-800/50 flex flex-col gap-3">
+          <a href="/account" className="text-gray-200 hover:text-white text-base flex items-center gap-3 px-3 py-3 rounded-lg bg-gray-800/80 transition-all">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            Account
+          </a>
+          <button className="text-gray-200 hover:text-white text-base flex items-center gap-3 px-3 py-3 rounded-lg bg-gray-800/80 transition-all">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m8.66-13.66l-.71.71M4.05 19.07l-.71.71M21 12h-1M4 12H3m16.66 6.66l-.71-.71M4.05 4.93l-.71-.71" />
+            </svg>
+            Theme
+          </button>
+          <button className="text-gray-200 hover:text-white text-base flex items-center gap-3 px-3 py-3 rounded-lg bg-gray-800/80 transition-all">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7" />
+            </svg>
+            Log out
+          </button>
         </div>
       </nav>
 
       {/* Main Content */}
-      <div className="flex-1 ml-64">
+      <div className="flex-1 ml-48">
         {/* Market Ticker */}
-        <div className={`w-full ${isCryptoMode ? 'bg-purple-900/80' : 'bg-gray-800'} border-b ${isCryptoMode ? 'border-purple-800' : 'border-gray-700'} sticky top-0 z-40`}>
-          <div className="py-1">
-            <div className={`flex flex-wrap justify-center gap-4 ${isCryptoMode ? 'crypto-shine' : ''}`}>
-              {isCryptoMode ? (
-                <>
-                  <span className="text-white text-sm">BTC: ${cryptoPrices.BTC.price.toFixed(2)} ({cryptoPrices.BTC.change >= 0 ? '+' : ''}{cryptoPrices.BTC.change.toFixed(2)}%)</span>
-                  <span className="text-white text-sm">ETH: ${cryptoPrices.ETH.price.toFixed(2)} ({cryptoPrices.ETH.change >= 0 ? '+' : ''}{cryptoPrices.ETH.change.toFixed(2)}%)</span>
-                  <span className="text-white text-sm">SOL: ${cryptoPrices.SOL.price.toFixed(2)} ({cryptoPrices.SOL.change >= 0 ? '+' : ''}{cryptoPrices.SOL.change.toFixed(2)}%)</span>
-                  <NewsSlider items={news} isCryptoMode={true} />
-                </>
-              ) : (
-                <>
-                  <span className="text-white text-sm">S&P 500: 4,783.45 (+0.32%)</span>
-                  <span className="text-white text-sm">Dow Jones: 37,305.16 (+0.07%)</span>
-                  <span className="text-white text-sm">Nasdaq: 14,963.23 (+0.09%)</span>
-                  <NewsSlider items={tickerNews} isCryptoMode={false} />
-                </>
-              )}
-            </div>
-          </div>
-        </div>
+   
+ 
 
-        <div className="flex flex-col items-center p-8 space-y-6 w-full">
+        <div className="flex flex-col items-center p-8 space-y-6 w-full pr-[520px]">
           {/* User Info and Portfolio Allocation */}
-          <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             {/* User Info */}
-            <div className="bg-gray-800 rounded-lg p-6">
+            <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700/50 p-6">
               <div>
-                <h1 className="text-xl text-gray-400 mb-4">
+                <h1 className="text-xl font-semibold text-gray-300 mb-4">
                   Welcome back, {profile?.email}
                 </h1>
                 <div className="space-y-4">
                   <div>
                     <p className="text-sm text-gray-400 mb-1">Total Balance</p>
-                    <p className="text-5xl font-semibold text-white font-['SF_Pro_Display'] tracking-tight">
+                    <p className="text-3xl font-semibold text-white tracking-tight">
                       ${profile?.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                   </div>
-                  <div className="grid grid-cols-3 gap-8">
+                  <div className="grid grid-cols-3 gap-4">
                     <div>
                       <p className="text-sm text-gray-400 mb-1">Total Return</p>
-                      <p className={`text-2xl font-semibold ${portfolioMetrics.totalReturn >= 0 ? 'text-green-500' : 'text-red-500'} font-['SF_Pro_Display']`}>
+                      <p className={`text-lg font-semibold ${portfolioMetrics.totalReturn >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                         {portfolioLoading ? '----' : `${portfolioMetrics.totalReturn >= 0 ? '+' : ''}${portfolioMetrics.totalReturn.toFixed(2)}%`}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-400 mb-1">24h Return</p>
-                      <p className={`text-2xl font-semibold ${portfolioMetrics.dailyReturn >= 0 ? 'text-green-500' : 'text-red-500'} font-['SF_Pro_Display']`}>
+                      <p className={`text-lg font-semibold ${portfolioMetrics.dailyReturn >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                         {portfolioLoading ? '----' : `${portfolioMetrics.dailyReturn >= 0 ? '+' : ''}${portfolioMetrics.dailyReturn.toFixed(2)}%`}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-400 mb-1">Portfolio Value</p>
-                      <p className="text-2xl font-semibold text-white font-['SF_Pro_Display']">
+                      <p className="text-lg font-semibold text-white">
                         {portfolioLoading ? '----' : `$${portfolioMetrics.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                       </p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-8 mt-4">
-                    <div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div> 
                       <p className="text-sm text-gray-400 mb-1">Total Cost</p>
-                      <p className="text-2xl font-semibold text-white font-['SF_Pro_Display']">
+                      <p className="text-lg font-semibold text-white">
                         {portfolioLoading ? '----' : `$${portfolioMetrics.totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-400 mb-1">Holdings</p>
-                      <p className="text-2xl font-semibold text-white font-['SF_Pro_Display']">
+                      <p className="text-lg font-semibold text-white">
                         {portfolioLoading ? '----' : portfolio.length}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-400 mb-1">Largest Position</p>
-                      <p className="text-2xl font-semibold text-white font-['SF_Pro_Display']">
+                      <p className="text-xl font-semibold text-white font-['SF_Pro_Display']">
                         {portfolioLoading ? '----' : portfolio.length > 0 ? 
                           portfolio.reduce((max, item) => 
                             (item.total_value ?? 0) > (max.total_value ?? 0) ? item : max
@@ -2145,237 +2209,157 @@ export default function DashboardPage() {
             </div>
 
             {/* Portfolio Allocation */}
-            <div className="bg-gray-800 rounded-lg p-6 flex flex-col h-full">
-              <h3 className="text-lg font-semibold text-white mb-4">Portfolio Allocation</h3>
-              <div className="flex-1 flex items-center justify-center">
-                <div className="w-full h-full max-h-[300px]">
-                  <PortfolioPieChart portfolio={portfolio} loading={portfolioLoading} />
+            <div className="flex items-center justify-center">
+              <div className="w-full max-w-[300px]">
+                <PortfolioPieChart portfolio={portfolio} loading={portfolioLoading} />
+              </div>
+            </div>
+          </div>
+
+          {/* Portfolio Performance and Stock Info Row */}
+          <div className="w-full flex flex-row gap-8 mt-4">
+            {/* Portfolio Stock Info List */}
+            <div className="flex flex-col w-1/2 max-w-[340px] mx-auto">
+              <h3 className="text-lg font-semibold text-white mb-3 text-center">Your Stocks</h3>
+              <div className="flex flex-col items-start">
+                {pagedPortfolio.length === 0 ? (
+                  <div className="text-gray-500">No stocks in portfolio.</div>
+                ) : (
+                  pagedPortfolio.map((item) => {
+                    const change = item.gain_loss_percentage ?? 0;
+                    const price = item.current_price ?? 0;
+                    return (
+                      <div key={item.symbol} className="flex items-center gap-4 mb-3 w-full">
+                        {logos[item.symbol] && (
+                          <img 
+                            src={logos[item.symbol]} 
+                            alt={`${item.symbol} logo`} 
+                            className="w-8 h-8 rounded-full object-contain bg-white mr-2"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          />
+                        )}
+                        <span className="font-bold text-xl text-white tracking-wide min-w-[60px]">{item.symbol}</span>
+                        <span className="text-lg text-gray-200 font-mono">${price.toFixed(2)}</span>
+                        <span className={`px-3 py-1 rounded-full text-sm font-semibold ${change >= 0 ? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400'}`}>{change >= 0 ? '+' : ''}{change.toFixed(2)}%</span>
+                      </div>
+                    );
+                  })
+                )}
+                {/* Pagination Button */}
+                {portfolio.length > (portfolioPage + 1) * stocksPerPage && (
+                  <button
+                    className="mt-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition font-semibold"
+                    onClick={() => setPortfolioPage((prev) => prev + 1)}
+                  >
+                    Load Next 5
+                  </button>
+                )}
+                {portfolioPage > 0 && (
+                  <button
+                    className="mt-2 ml-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition font-semibold"
+                    onClick={() => setPortfolioPage((prev) => prev - 1)}
+                  > 
+                    Previous
+                  </button>
+                )}
+              </div>
+            </div>
+            {/* Portfolio Performance Graph on the right */}
+            <div className="flex-1 flex justify-end">
+              <div className="w-full max-w-xl bg-gray-800 rounded-lg p-4">
+                <h3 className="text-lg text-center font-semibold text-white mb-3">Portfolio Performance</h3>
+                <div className="h-[250px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={portfolioHistory}>
+                      <defs>
+                        <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10B981" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <XAxis 
+                        dataKey="date" 
+                        tick={{ fill: '#9CA3AF' }}
+                        tickLine={{ stroke: '#4B5563' }}
+                        axisLine={{ stroke: '#4B5563' }}
+                      />
+                      <YAxis 
+                        tick={{ fill: '#9CA3AF' }}
+                        tickLine={{ stroke: '#4B5563' }}
+                        axisLine={{ stroke: '#4B5563' }}
+                        tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                      />
+                      <Tooltip
+                        contentStyle={{ 
+                          backgroundColor: '#1F2937',
+                          border: '1px solid #374151',
+                          borderRadius: '0.5rem',
+                          color: '#F3F4F6'
+                        }}
+                        formatter={(value: number) => [`$${value.toLocaleString()}`, 'Portfolio Value']}
+                        labelStyle={{ color: '#9CA3AF' }}
+                      />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                      <Area
+                        type="monotone"
+                        dataKey="value"
+                        stroke="#10B981"
+                        fillOpacity={1}
+                        fill="url(#colorValue)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Graph */}
-          <div className="w-full bg-gray-800 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">Portfolio Performance</h3>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={portfolioHistory}>
-                  <defs>
-                    <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10B981" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <XAxis 
-                    dataKey="date" 
-                    tick={{ fill: '#9CA3AF' }}
-                    tickLine={{ stroke: '#4B5563' }}
-                    axisLine={{ stroke: '#4B5563' }}
+          {/* ChatGPT Copilot Section */}
+          <div className="fixed right-0 top-0 w-[500px] h-screen bg-gradient-to-br from-[#181c2a] via-[#23294a] to-[#1a1d2b] shadow-xl flex flex-col border-l border-gray-700">
+            <div className="flex-1 flex flex-col justify-start items-center pt-12">
+              <div className="w-full flex flex-col items-center">
+                {/* Title */}
+                <h1 className="text-6xl font-extrabold bg-gradient-to-r from-green-400 via-blue-400 to-purple-400 bg-clip-text text-transparent mb-6 text-center">CoPilot</h1>
+                <p className="text-lg text-gray-200 mb-10 text-center font-medium">All of stocks and crypto, one trusted assistant</p>
+                {/* Search Bar */}
+                <div className="relative w-full max-w-md mb-10">
+                  <input
+                    type="text"
+                    placeholder="Start with a question"
+                    className="w-full bg-[#23294a] text-white rounded-xl px-6 py-4 pr-12 focus:outline-none focus:ring-2 focus:ring-green-400 text-lg shadow-lg placeholder-shine"
                   />
-                  <YAxis 
-                    tick={{ fill: '#9CA3AF' }}
-                    tickLine={{ stroke: '#4B5563' }}
-                    axisLine={{ stroke: '#4B5563' }}
-                    tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
-                  />
-                  <Tooltip
-                    contentStyle={{ 
-                      backgroundColor: '#1F2937',
-                      border: '1px solid #374151',
-                      borderRadius: '0.5rem',
-                      color: '#F3F4F6'
-                    }}
-                    formatter={(value: number) => [`$${value.toLocaleString()}`, 'Portfolio Value']}
-                    labelStyle={{ color: '#9CA3AF' }}
-                  />
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <Area
-                    type="monotone"
-                    dataKey="value"
-                    stroke="#10B981"
-                    fillOpacity={1}
-                    fill="url(#colorValue)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Top Stocks/Crypto */}
-          <div className="w-full max-w-7xl">
-            <div className="flex gap-6">
-              {/* Category Selector Sidebar */}
-              {!showWatchlist && !isCryptoMode && (
-                <div className="w-48 flex-shrink-0">
-                  <div className="sticky top-24 space-y-2">
-                    <h3 className="text-lg font-semibold text-white mb-4">
-                      Categories
-                      <InfoBubble
-                        title="Stock Categories"
-                        content="Categories help organize stocks by sector or theme, making it easier to find and analyze related companies. Each category represents a different segment of the market."
-                      />
-                    </h3>
-                    <div
-                      onClick={() => {
-                        setCurrentCategory('magnificent7');
-                        setCurrentStockIndex(0);
-                      }}
-                      className={`w-full px-4 py-3 rounded-lg transition-all duration-200 text-left cursor-pointer ${
-                        currentCategory === 'magnificent7'
-                          ? 'bg-green-500 text-white' 
-                          : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                      }`}
-                    >
-                      Magnificent 7
-                    </div>
-                    <div
-                      onClick={() => {
-                        setCurrentCategory('techGiants');
-                        setCurrentStockIndex(0);
-                      }}
-                      className={`w-full px-4 py-3 rounded-lg transition-all duration-200 text-left cursor-pointer ${
-                        currentCategory === 'techGiants'
-                          ? 'bg-green-500 text-white' 
-                          : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                      }`}
-                    >
-                      Tech Giants
-                      <InfoBubble title="Tech Giants" content={categoryInfo.techGiants} />
-                    </div>
-                    <div
-                      onClick={() => {
-                        setCurrentCategory('financial');
-                        setCurrentStockIndex(0);
-                      }}
-                      className={`w-full px-4 py-3 rounded-lg transition-all duration-200 text-left cursor-pointer ${
-                        currentCategory === 'financial'
-                          ? 'bg-green-500 text-white' 
-                          : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                      }`}
-                    >
-                      Financial Sector
-                      <InfoBubble title="Financial Sector" content={categoryInfo.financial} />
-                    </div>
-                    <div
-                      onClick={() => {
-                        setCurrentCategory('healthcare');
-                        setCurrentStockIndex(0);
-                      }}
-                      className={`w-full px-4 py-3 rounded-lg transition-all duration-200 text-left cursor-pointer ${
-                        currentCategory === 'healthcare'
-                          ? 'bg-green-500 text-white' 
-                          : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                      }`}
-                    >
-                      Healthcare
-                      <InfoBubble title="Healthcare" content={categoryInfo.healthcare} />
-                    </div>
-                    <div
-                      onClick={() => {
-                        setCurrentCategory('energy');
-                        setCurrentStockIndex(0);
-                      }}
-                      className={`w-full px-4 py-3 rounded-lg transition-all duration-200 text-left cursor-pointer ${
-                        currentCategory === 'energy'
-                          ? 'bg-green-500 text-white' 
-                          : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                      }`}
-                    >
-                      Energy
-                      <InfoBubble title="Energy" content={categoryInfo.energy} />
-                    </div>
-                    <div
-                      onClick={() => {
-                        setCurrentCategory('consumer');
-                        setCurrentStockIndex(0);
-                      }}
-                      className={`w-full px-4 py-3 rounded-lg transition-all duration-200 text-left cursor-pointer ${
-                        currentCategory === 'consumer'
-                          ? 'bg-green-500 text-white' 
-                          : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                      }`}
-                    >
-                      Consumer Goods
-                      <InfoBubble title="Consumer Goods" content={categoryInfo.consumer} />
-                    </div>
-                  </div>
+                  <button className="absolute right-4 top-1/2 -translate-y-1/2 text-green-400 hover:text-green-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                  </button>
                 </div>
-              )}
-
-              {/* Main Content */}
-              <div className="flex-1">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-2xl font-semibold text-white">
-                    {showWatchlist ? 'Watchlist' : isCryptoMode ? 'Top Cryptocurrencies' : 'Top Stocks'}
-                  </h2>
-                  <div className="flex gap-4">
-                    <button
-                      onClick={() => setShowWatchlist(!showWatchlist)}
-                      className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors"
-                    >
-                      {showWatchlist ? `Show Top ${isCryptoMode ? 'Cryptocurrencies' : 'Stocks'}` : 'Show Watchlist'}
-                    </button>
-                  </div>
+                {/* Suggestion Buttons */}
+                <div className="grid grid-cols-2 gap-4 w-full max-w-md mb-6">
+                  <button className="bg-[#23294a] hover:bg-[#2d335c] transition-colors rounded-xl p-4 text-left shadow border border-transparent hover:border-green-400">
+                    <div className="text-xs text-green-300 font-semibold mb-1">Stocks</div>
+                    <div className="text-white font-medium">What are the top performing stocks this year?</div>
+                  </button>
+                  <button className="bg-[#23294a] hover:bg-[#2d335c] transition-colors rounded-xl p-4 text-left shadow border border-transparent hover:border-blue-400">
+                    <div className="text-xs text-blue-300 font-semibold mb-1">ETFs</div>
+                    <div className="text-white font-medium">Show me the best ETFs for tech exposure.</div>
+                  </button>
+                  <button className="bg-[#23294a] hover:bg-[#2d335c] transition-colors rounded-xl p-4 text-left shadow border border-transparent hover:border-purple-400">
+                    <div className="text-xs text-purple-300 font-semibold mb-1">Futures</div>
+                    <div className="text-white font-medium">How do S&P 500 futures work?</div>
+                  </button>
+                  <button className="bg-[#23294a] hover:bg-[#2d335c] transition-colors rounded-xl p-4 text-left shadow border border-transparent hover:border-pink-400">
+                    <div className="text-xs text-pink-300 font-semibold mb-1">Investing</div>
+                    <div className="text-white font-medium">Tips for long-term investing in crypto?</div>
+                  </button>
                 </div>
-
-                <div className="relative">
-                  <div className="flex items-center">
-                    <button
-                      onClick={() => setCurrentStockIndex(prev => Math.max(0, prev - 3))}
-                      disabled={currentStockIndex === 0}
-                      className={`absolute left-0 z-10 p-2 rounded-full bg-gray-800 text-white hover:bg-gray-700 transition-colors ${currentStockIndex === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                      ←
-                    </button>
-                    <div className="grid grid-cols-3 gap-6 mb-8 w-full px-12">
-                      {showWatchlist ? (
-                        watchlistLoading ? (
-                          <div className="col-span-full text-center py-8">
-                            <p className="text-white">Loading watchlist...</p>
-                          </div>
-                        ) : watchlist.length === 0 ? (
-                          <div className="col-span-full text-center py-8">
-                            <p className="text-gray-400">Your watchlist is empty</p>
-                          </div>
-                        ) : (
-                          watchlist.slice(currentStockIndex, currentStockIndex + 3).map((item) => (
-                            <div key={item.symbol} className="bg-gray-900 rounded-lg shadow-lg overflow-hidden max-w-md mx-auto w-full">
-                              <TradingViewMiniWidget symbol={item.symbol} />
-                            </div>
-                          ))
-                        )
-                      ) : (
-                        (isCryptoMode ? defaultCryptoTickers : stockCategories[currentCategory])
-                          .slice(currentStockIndex, currentStockIndex + 3)
-                          .map((symbol) => (
-                            <div key={symbol} className="bg-gray-900 rounded-lg shadow-lg overflow-hidden max-w-md mx-auto w-full">
-                              <TradingViewMiniWidget symbol={symbol} />
-                            </div>
-                          ))
-                      )}
-                    </div>
-                    <button
-                      onClick={() => setCurrentStockIndex(prev => {
-                        const maxIndex = showWatchlist 
-                          ? Math.max(0, watchlist.length - 3) 
-                          : Math.max(0, (isCryptoMode ? defaultCryptoTickers : stockCategories[currentCategory]).length - 3);
-                        return Math.min(maxIndex, prev + 3);
-                      })}
-                      disabled={showWatchlist 
-                        ? currentStockIndex >= watchlist.length - 3 
-                        : currentStockIndex >= (isCryptoMode ? defaultCryptoTickers : stockCategories[currentCategory]).length - 3}
-                      className={`absolute right-0 z-10 p-2 rounded-full bg-gray-800 text-white hover:bg-gray-700 transition-colors ${
-                        (showWatchlist 
-                          ? currentStockIndex >= watchlist.length - 3 
-                          : currentStockIndex >= (isCryptoMode ? defaultCryptoTickers : stockCategories[currentCategory]).length - 3) 
-                          ? 'opacity-50 cursor-not-allowed' 
-                          : ''
-                      }`}
-                    >
-                      →
-                    </button>
-                  </div>
+                {/* See More Button */}
+                <button className="w-full max-w-md bg-gradient-to-r from-green-400 via-blue-400 to-purple-400 text-white font-semibold py-3 rounded-xl shadow hover:opacity-90 transition mb-6">See More</button>
+                {/* Info Box Below */}
+                <div className="relative bg-gradient-to-r from-green-400 via-blue-400 to-purple-400 rounded-xl shadow-lg p-5 flex flex-col items-start w-full max-w-md">
+                  <button className="absolute top-2 right-2 text-white/80 hover:text-white text-lg font-bold">×</button>
+                  <div className="text-white text-lg font-bold mb-1">Introducing SimuTrader Copilot</div>
+                  <div className="text-white/90 text-sm mb-1">Your all-in-one AI assistant for stocks, crypto, and investing. Get trusted answers, insights, and more—powered by SimuTrader's research and real-time data.</div>
                 </div>
               </div>
             </div>
@@ -2448,169 +2432,243 @@ export default function DashboardPage() {
           </div>
 
           {/* Stock/Crypto Price History */}
-          <div className={`w-full max-w-7xl p-6 ${isCryptoMode ? 'bg-black' : 'bg-gray-900'} rounded-lg shadow-lg ${isCryptoMode ? 'crypto-glow' : ''}`}>
+          <div className={`w-full max-w-7xl p-6 ${isCryptoMode ? 'bg-black' : 'bg-gray-900'} rounded-lg shadow-lg ${isCryptoMode ? 'crypto-glow' : ''}`}> 
             <div className="flex justify-between items-center mb-6">
               <div className="flex items-center gap-4">
-                {logos[selectedStock] && (
-                  <img 
-                    src={logos[selectedStock]} 
-                    alt={`${selectedStock} logo`} 
-                    className="w-10 h-10 rounded-full object-contain bg-white"
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                    }}
-                  />
-                )}
-                <h3 className="font-bold text-xl text-white">
-                  {selectedStock}
-                </h3>
-              </div>
-              {stocks[selectedStock]?.price && (
-                <div className="flex items-center gap-2">
-                  <span className="text-3xl font-bold text-white">
-                    ${stocks[selectedStock].price.toFixed(2)}
-                  </span>
-                  <span className={`text-lg font-semibold ${stocks[selectedStock].change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                    ({stocks[selectedStock].change > 0 ? '+' : ''}{stocks[selectedStock].change.toFixed(2)}%)
-                  </span>
-                  <div className="flex gap-2 ml-4">
+                
+                  <div className="flex items-center justify-center gap-2 ml-4">
                     <button
                       onClick={() => setShowBuyModal(true)}
-                      className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 cursor-pointer"
+                      className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-full shadow hover:from-green-600 hover:to-emerald-700 active:scale-95 transition-all font-semibold text-base"
                     >
-                      <span className="text-xl">+</span>
-                      <span>Buy</span>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+                      Buy
                     </button>
                     <button
                       onClick={() => setShowSellModal(true)}
-                      className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2 cursor-pointer"
+                      className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-full shadow hover:from-red-600 hover:to-pink-600 active:scale-95 transition-all font-semibold text-base"
                     >
-                      <span className="text-xl">-</span>
-                      <span>Sell</span>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4"/></svg>
+                      Sell
                     </button>
                     <button
                       onClick={isInWatchlist(selectedStock) ? () => handleRemoveFromWatchlist(selectedStock) : handleAddToWatchlist}
-                      className={`px-4 py-2 ${isInWatchlist(selectedStock) ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-blue-500 hover:bg-blue-600'} text-white rounded-lg transition-colors flex items-center gap-2 cursor-pointer`}
+                      className={`flex items-center gap-2 px-5 py-2.5 ${isInWatchlist(selectedStock) ? 'bg-gradient-to-r from-yellow-400 to-yellow-500' : 'bg-gradient-to-r from-blue-500 to-indigo-500'} text-white rounded-full shadow hover:opacity-90 active:scale-95 transition-all font-semibold text-base`}
                     >
-                      <span className="text-xl">★</span>
-                      <span>{isInWatchlist(selectedStock) ? 'Watching' : 'Watch'}</span>
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.967a1 1 0 00.95.69h4.175c.969 0 1.371 1.24.588 1.81l-3.38 2.455a1 1 0 00-.364 1.118l1.287 3.966c.3.922-.755 1.688-1.54 1.118l-3.38-2.454a1 1 0 00-1.175 0l-3.38 2.454c-.784.57-1.838-.196-1.54-1.118l1.287-3.966a1 1 0 00-.364-1.118L2.05 9.394c-.783-.57-.38-1.81.588-1.81h4.175a1 1 0 00.95-.69l1.286-3.967z"/></svg>
+                      {isInWatchlist(selectedStock) ? 'Watching' : 'Watch'}
                     </button>
                     {getSharesOwned(selectedStock) > 0 && (
-                      <div className="px-4 py-2 bg-gray-700 text-white rounded-lg flex items-center gap-2">
+                      <div className="px-4 py-2 bg-gray-700 text-white rounded-lg flex items-center gap-2 ml-auto">
                         <span className="text-sm">Current Position: {getSharesOwned(selectedStock)} {isCryptoMode ? 'Coins' : 'Shares'}</span>
                       </div>
                     )}
                   </div>
                 </div>
-              )}
+              
             </div>
             {stocks[selectedStock]?.history ? (
               <div className="grid grid-cols-12 gap-6">
-                {/* Left Sidebar - Today's Trading */}
-                <div className="col-span-2 space-y-4">
-                  <div className="p-6 bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700/50">
+                {/* Main Content - Graph and Company Info */}
+                <div className="col-span-8 space-y-6">
+                  {/* Graph Section */}
+                  <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700/50 p-6">
+                    <div className="h-[400px] w-full">
+                      {selectedStock ? (
+                        <div className="relative h-full">
+                          <TradingViewWidget symbol={selectedStock} />
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center h-full">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
+                          <span className="ml-3 text-white">Loading chart...</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Company Info and Key Stats */}
+                  {companyOverview && !isCryptoMode && (
+                    <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700/50 p-6">
+                      <div className="grid grid-cols-2 gap-8">
+                        {/* Company Description */}
+                        <div className="space-y-4">
+                          <h3 className="text-xl font-bold text-white">About {companyOverview.Name}</h3>
+                          <p className="text-gray-300 text-sm leading-relaxed">{companyOverview.Description}</p>
+                          
+                          <div className="grid grid-cols-2 gap-4 mt-4">
+                            <div>
+                              <p className="text-sm text-gray-400">Sector</p>
+                              <p className="text-white font-medium">{companyOverview.Sector}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-400">Industry</p>
+                              <p className="text-white font-medium">{companyOverview.Industry}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-400">Country</p>
+                              <p className="text-white font-medium">{companyOverview.Country}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-400">Exchange</p>
+                              <p className="text-white font-medium">{companyOverview.Exchange}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Key Statistics */}
+                        <div className="space-y-4">
+                          <h3 className="text-xl font-bold text-white">
+                            Key Statistics
+                            <InfoBubble title="Key Statistics" content={sectionInfo.keyStats} />
+                          </h3>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-sm text-gray-400">Market Cap</p>
+                              <p className="text-white font-medium">${Number(companyOverview.MarketCapitalization).toLocaleString()}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-400"></p>
+                            
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-400">Revenue (TTM)</p>
+                              <p className="text-white font-medium">${Number(companyOverview.RevenueTTM).toLocaleString()}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-400"></p>
+                            
+                            </div>
+                            
+                            <div>
+                              <p className="text-sm text-gray-400">P/E Ratio</p>
+                              <p className="text-white font-medium">{companyOverview.PERatio}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-400">Forward P/E</p>
+                              <p className="text-white font-medium">{companyOverview.ForwardPE}</p>
+                            </div>
+
+                            <div>
+                              <p className="text-sm text-gray-400">PEG Ratio</p>
+                              <p className="text-white font-medium">{companyOverview.PEGRatio}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-400">EPS</p>
+                              <p className="text-white font-medium">${companyOverview.EPS}</p>
+                            </div>
+
+                            <div>
+                              <p className="text-sm text-gray-400">Profit Margin</p>
+                              <p className="text-white font-medium">{companyOverview.ProfitMargin}%</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-400">Operating Margin</p>
+                              <p className="text-white font-medium">{companyOverview.OperatingMarginTTM}%</p>
+                            </div>
+
+                            <div>
+                              <p className="text-sm text-gray-400">Return on Equity</p>
+                              <p className="text-white font-medium">{companyOverview.ReturnOnEquityTTM}%</p>
+                            </div>
+                         
+
+                            <div>
+                              <p className="text-sm text-gray-400">Dividend Yield</p>
+                              <p className="text-white font-medium">{companyOverview.DividendYield}%</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-400">52 Week High</p>
+                              <p className="text-white font-medium">${companyOverview['52WeekHigh']}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-400">52 Week Low</p>
+                              <p className="text-white font-medium">${companyOverview['52WeekLow']}</p>
+                            </div>
+
+                            <div>
+                              <p className="text-sm text-gray-400">Beta</p>
+                              <p className="text-white font-medium">{companyOverview.Beta}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-400">Analyst Target</p>
+                              <p className="text-white font-medium">${companyOverview.AnalystTargetPrice}</p>
+                            </div>
+
+                            <div>
+                              <p className="text-sm text-gray-400">Quarterly Growth (YoY)</p>
+                              <p className="text-white font-medium">{companyOverview.QuarterlyEarningsGrowthYOY}%</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-400">Revenue Growth (YoY)</p>
+                              <p className="text-white font-medium">{companyOverview.QuarterlyRevenueGrowthYOY}%</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Right Sidebar - Today's Trading and Technical Indicators */}
+                <div className="col-span-4 space-y-6">
+                  {/* Today's Trading */}
+                  <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700/50 p-6">
                     <h4 className="text-lg font-bold text-white mb-4 border-b border-gray-700/50 pb-2">
                       Today's Trading
                       <InfoBubble title="Today's Trading" content={sectionInfo.trading} />
                     </h4>
                     {stocks[selectedStock]?.dailyData ? (
                       <div className="space-y-4">
-                        <div>
-                          <p className="text-sm text-gray-400 mb-1">Previous Close</p>
-                          <p className="text-base font-semibold text-white">
-                            ${stocks[selectedStock].dailyData.previousClose.toFixed(2)}
-                          </p>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-400 mb-1">Open</p>
+                            <p className="text-base font-semibold text-white">
+                              ${stocks[selectedStock].dailyData.open.toFixed(2)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-400 mb-1">High</p>
+                            <p className="text-base font-semibold text-white">
+                              ${stocks[selectedStock].dailyData.high.toFixed(2)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-400 mb-1">Low</p>
+                            <p className="text-base font-semibold text-white">
+                              ${stocks[selectedStock].dailyData.low.toFixed(2)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-400 mb-1">Close</p>
+                            <p className="text-base font-semibold text-white">
+                              ${stocks[selectedStock].dailyData.close.toFixed(2)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-400 mb-1">Change</p>
+                            <p className={`text-base font-semibold ${stocks[selectedStock].dailyData.change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                              {stocks[selectedStock].dailyData.change >= 0 ? '+' : ''}{stocks[selectedStock].dailyData.change.toFixed(2)}%
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-400 mb-1">Volume</p>
+                            <p className="text-base font-semibold text-white">
+                              {stocks[selectedStock].dailyData.volume.toLocaleString()}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm text-gray-400 mb-1">Open</p>
-                          <p className="text-base font-semibold text-white">
-                            ${stocks[selectedStock].dailyData.open.toFixed(2)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-400 mb-1">High</p>
-                          <p className="text-base font-semibold text-white">
-                            ${stocks[selectedStock].dailyData.high.toFixed(2)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-400 mb-1">Low</p>
-                          <p className="text-base font-semibold text-white">
-                            ${stocks[selectedStock].dailyData.low.toFixed(2)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-400 mb-1">Close</p>
-                          <p className="text-base font-semibold text-white">
-                            ${stocks[selectedStock].dailyData.close.toFixed(2)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-400 mb-1">Change</p>
-                          <p className={`text-base font-semibold ${stocks[selectedStock].dailyData.change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                            {stocks[selectedStock].dailyData.change >= 0 ? '+' : ''}{stocks[selectedStock].dailyData.change.toFixed(2)}%
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-400 mb-1">API Call Date</p>
-                          <p className="text-base font-semibold text-white">
-                            {new Date(stocks[selectedStock].dailyData.date).toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric'
-                            })}
-                          </p>
-                        </div>
-                    </div>
+                      </div>
                     ) : (
-                      <div className="text-center py-4">
-                        <p className="text-gray-400">Loading trading data...</p>
+                      <div className="animate-pulse space-y-4">
+                        <div className="h-4 bg-gray-700 rounded w-3/4"></div>
+                        <div className="h-4 bg-gray-700 rounded w-1/2"></div>
                       </div>
                     )}
                   </div>
-                </div>
 
-                {/* Main Chart */}
-                <div className="col-span-8">
-                  <div className="h-[500px] w-full bg-gray-800 rounded-lg overflow-hidden">
-                    {selectedStock ? (
-                      <div className="relative h-full">
-                        <TradingViewWidget symbol={selectedStock} />
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center h-full">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
-                        <span className="ml-3 text-white">Loading chart...</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Right Sidebar - Performance Metrics */}
-                <div className="col-span-2 space-y-4">
-                  <div className="p-6 bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700/50">
-                    <h4 className="text-lg font-bold text-white mb-4 border-b border-gray-700/50 pb-2">
-                      Performance
-                      <InfoBubble title="Performance" content={sectionInfo.performance} />
-                    </h4>
-                    <div className="space-y-4">
-                      <div>
-                        <p className="text-sm text-gray-400 mb-1">52-Week High</p>
-                        <p className="text-base font-semibold text-white">${Math.max(...stocks[selectedStock].history.map(h => h.price)).toFixed(2)}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-400 mb-1">52-Week Low</p>
-                        <p className="text-base font-semibold text-white">${Math.min(...stocks[selectedStock].history.map(h => h.price)).toFixed(2)}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-400 mb-1">YTD Change</p>
-                        <p className={`text-base font-semibold ${stocks[selectedStock].change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                          {stocks[selectedStock].change > 0 ? '+' : ''}{stocks[selectedStock].change.toFixed(2)}%
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="p-6 bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700/50">
+                  {/* Technical Indicators */}
+                  <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700/50 p-6">
                     <h4 className="text-lg font-bold text-white mb-4 border-b border-gray-700/50 pb-2">
                       Technical Indicators
                       <InfoBubble title="Technical Indicators" content={sectionInfo.technical} />
@@ -2630,235 +2688,21 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Latest News */}
+                  <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700/50 p-6">
+                    <h4 className="text-lg font-bold text-white mb-4 border-b border-gray-700/50 pb-2">
+                      Latest News
+                      <InfoBubble title="Latest News" content="Recent news articles about the selected stock with sentiment analysis." />
+                    </h4>
+                    <CompactNewsCard items={news} />
+                  </div>
                 </div>
               </div>
             ) : (
               <p className="text-white">Loading graph…</p>
             )}
           </div>
-
-          {/* Company Overview Section - Move it here */}
-          {companyOverview && !isCryptoMode && (
-            <div className={`w-full max-w-7xl p-6 ${isCryptoMode ? 'bg-black' : 'bg-gray-900'} rounded-lg shadow-lg mt-6 ${isCryptoMode ? 'crypto-glow' : ''}`}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Company Description */}
-                <div className="space-y-4">
-                  <h3 className="text-xl font-bold text-white">About {companyOverview.Name}</h3>
-                  <p className="text-gray-300">{companyOverview.Description}</p>
-                  
-                  <div className="grid grid-cols-2 gap-4 mt-4">
-                    <div>
-                      <p className="text-sm text-gray-400">Sector</p>
-                      <p className="text-white">{companyOverview.Sector}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-400">Industry</p>
-                      <p className="text-white">{companyOverview.Industry}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-400">Country</p>
-                      <p className="text-white">{companyOverview.Country}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-400">Exchange</p>
-                      <p className="text-white">{companyOverview.Exchange}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Key Statistics */}
-                <div className="space-y-4">
-                  <h3 className="text-xl font-bold text-white">
-                    Key Statistics
-                    <InfoBubble title="Key Statistics" content={sectionInfo.keyStats} />
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-gray-400">Market Cap</p>
-                      <p className="text-white">${Number(companyOverview.MarketCapitalization).toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-400">P/E Ratio</p>
-                      <p className="text-white">{companyOverview.PERatio}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-400">EPS</p>
-                      <p className="text-white">${companyOverview.EPS}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-400">Dividend Yield</p>
-                      <p className="text-white">{companyOverview.DividendYield}%</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-400">52 Week High</p>
-                      <p className="text-white">${companyOverview['52WeekHigh']}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-400">52 Week Low</p>
-                      <p className="text-white">${companyOverview['52WeekLow']}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-400">Beta</p>
-                      <p className="text-white">{companyOverview.Beta}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-400">Analyst Target Price</p>
-                      <p className="text-white">${companyOverview.AnalystTargetPrice}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Crypto Overview Section */}
-          {isCryptoMode && selectedStock === 'BTC' && (
-            <div className="w-full max-w-7xl p-6 bg-black rounded-lg shadow-lg mt-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Bitcoin Description */}
-                <div className="space-y-4">
-                  <h3 className="text-xl font-bold text-white">About Bitcoin (BTC)</h3>
-                  <p className="text-gray-300">
-                    Bitcoin is the first and most well-known cryptocurrency, created in 2009 by an anonymous person or group using the pseudonym Satoshi Nakamoto. It operates on a decentralized peer-to-peer network, using blockchain technology to enable secure, transparent transactions without the need for intermediaries like banks.
-                  </p>
-                  
-                  <div className="grid grid-cols-2 gap-4 mt-4">
-                    <div>
-                      <p className="text-sm text-gray-400">Category</p>
-                      <p className="text-white">Cryptocurrency</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-400">Network</p>
-                      <p className="text-white">Bitcoin Blockchain</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-400">Consensus</p>
-                      <p className="text-white">Proof of Work</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-400">Launch Date</p>
-                      <p className="text-white">January 2009</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Key Statistics */}
-                <div className="space-y-4">
-                  <h3 className="text-xl font-bold text-white">Key Statistics</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-gray-400">Market Cap</p>
-                      <p className="text-white">$850B+</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-400">Circulating Supply</p>
-                      <p className="text-white">19.5M BTC</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-400">Max Supply</p>
-                      <p className="text-white">21M BTC</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-400">Block Time</p>
-                      <p className="text-white">~10 minutes</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-400">All-Time High</p>
-                      <p className="text-white">$69,000</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-400">All-Time Low</p>
-                      <p className="text-white">$0.06</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-400">24h Volume</p>
-                      <p className="text-white">$25B+</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-400">Dominance</p>
-                      <p className="text-white">~50%</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* News Section */}
-          <div className="w-full max-w-7xl">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className={`text-2xl font-semibold ${isCryptoMode ? 'crypto-text' : 'text-white'}`}>
-                {isCryptoMode ? 'Crypto News' : `Market News: ${selectedStock}`}
-              </h2>
-              <div className="flex gap-4">
-                <button
-                  onClick={() => setShowNews(!showNews)}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors"
-                >
-                  {showNews ? 'Hide News' : 'Show News'}
-                </button>
-              </div>
-            </div>
-            {showNews && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {news.map((item, index) => (
-                  <div key={index} className="bg-gray-900 rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 hover:scale-[1.02]">
-                    {item.image && (
-                      <div className="relative h-48 w-full">
-                        <img
-                          src={item.image}
-                          alt={item.title}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                          }}
-                        />
-                      </div>
-                    )}
-                    <div className="p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className={`px-2 py-1 rounded-full text-xs border ${sentimentColors[item.sentiment]}`}>
-                          {sentimentLabels[item.sentiment]}
-                        </span>
-                      </div>
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block"
-                      >
-                        <h3 className="text-lg font-semibold text-white mb-2 line-clamp-2 hover:text-green-400 transition-colors">{item.title}</h3>
-                        <p className="text-gray-400 mb-4 line-clamp-3">{item.summary}</p>
-                      </a>
-                      <div className="flex flex-wrap gap-2 mb-3">
-                        {item.tickers?.map((ticker, i) => (
-                          <span key={i} className="px-2 py-1 bg-gray-800 text-gray-300 rounded-full text-xs">
-                            {ticker}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="flex justify-between items-center text-sm text-gray-500">
-                        <span>{new Date(item.time).toLocaleDateString()}</span>
-                        <a
-                          href={item.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 hover:text-green-400 transition-colors"
-                        >
-                          Read More
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                          </svg>
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-      
 
           {/* Portfolio Section */}
           <div className={`w-full max-w-6xl p-6 ${isCryptoMode ? 'bg-purple-900/50' : 'bg-gray-900'} rounded-lg shadow-lg mt-6 ${isCryptoMode ? 'crypto-glow' : ''}`}>
