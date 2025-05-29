@@ -59,3 +59,77 @@ body {
   animation: borderGlow 1.5s ease-in-out infinite;
   border-color: #22c55e;
 }
+
+/* Custom animations for shimmer effects */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.placeholder-shine::placeholder {
+  background: linear-gradient(90deg, #6b7280 25%, #9ca3af 50%, #6b7280 75%);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Crypto glow effect */
+.crypto-glow {
+  box-shadow: 0 0 20px rgba(139, 69, 255, 0.3), 0 0 40px rgba(139, 69, 255, 0.1);
+}
+
+.crypto-glow:hover {
+  box-shadow: 0 0 30px rgba(139, 69, 255, 0.4), 0 0 60px rgba(139, 69, 255, 0.2);
+  transition: box-shadow 0.3s ease;
+}
+
+/* Animated thinking text similar to ChatGPT */
+@keyframes shimmer-text {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    text-shadow: 0 0 5px rgba(255, 255, 255, 0.8), 0 0 10px rgba(255, 255, 255, 0.6);
+  }
+  50% {
+    text-shadow: 0 0 10px rgba(255, 255, 255, 1), 0 0 20px rgba(255, 255, 255, 0.8);
+  }
+}
+
+.animated-thinking-text {
+  background: linear-gradient(
+    90deg,
+    #ffffff 0%,
+    #e5e7eb 25%,
+    #ffffff 50%,
+    #e5e7eb 75%,
+    #ffffff 100%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer-text 2s ease-in-out infinite;
+  font-weight: 500;
+  letter-spacing: 0.025em;
+}
+
+/* Alternative glowing version */
+.animated-thinking-text-glow {
+  color: #ffffff;
+  animation: glow-pulse 1.5s ease-in-out infinite;
+  font-weight: 500;
+  letter-spacing: 0.025em;
+}
