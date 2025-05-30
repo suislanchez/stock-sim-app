@@ -2059,13 +2059,19 @@ export default function DashboardPage() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState('');
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  // State for CoPilot chat and confirmation
   const [pendingAction, setPendingAction] = useState<any>(null);
   const [confirmationMessage, setConfirmationMessage] = useState('');
   const [editableShares, setEditableShares] = useState<number>(0);
   const [thinkingState, setThinkingState] = useState<'thinking' | 'reasoning' | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  let messageIdCounter = 0;
+
+  // Function to generate unique message IDs
+  const generateMessageId = () => {
+    messageIdCounter += 1;
+    return `${Date.now()}_${messageIdCounter}_${Math.random().toString(36).substr(2, 9)}`;
+  };
 
   // Add this function to scroll to bottom of messages
   const scrollToBottom = () => {
@@ -2098,7 +2104,7 @@ export default function DashboardPage() {
     const userMessage = input.trim();
     setInput('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
-    const userMessageId = Date.now().toString();
+    const userMessageId = generateMessageId();
     setMessages(prev => [...prev, { role: 'user', content: userMessage, id: userMessageId }]);
     setIsLoading(true);
     setStreamingMessage('');
@@ -2114,7 +2120,7 @@ export default function DashboardPage() {
         setMessages(prev => [...prev, { 
           role: 'assistant', 
           content: `You asked me to buy ${buyRequest.shares} shares of ${buyRequest.symbol}. Would you like to confirm this purchase?`,
-          id: Date.now().toString()
+          id: generateMessageId()
         }]);
         
         setPendingAction({
@@ -2191,7 +2197,7 @@ export default function DashboardPage() {
       setMessages(prev => [...prev, { 
         role: 'assistant', 
         content: accumulatedMessage,
-        id: Date.now().toString()
+        id: generateMessageId()
       }]);
       setStreamingMessage('');
       
@@ -2201,7 +2207,7 @@ export default function DashboardPage() {
       setMessages(prev => [...prev, { 
         role: 'assistant', 
         content: 'Sorry, I encountered an error. Please try again.',
-        id: Date.now().toString()
+        id: generateMessageId()
       }]);
     } finally {
       setIsLoading(false);
@@ -2242,7 +2248,7 @@ export default function DashboardPage() {
         setMessages(prev => [...prev, { 
           role: 'assistant', 
           content: `⚠️ Using demo price of $${mockPrice.toFixed(2)} for ${pendingAction.symbol} (real-time data unavailable)`,
-          id: Date.now().toString()
+          id: generateMessageId()
         }]);
         
         const totalCost = mockPrice * editableShares;
@@ -2252,7 +2258,7 @@ export default function DashboardPage() {
           setMessages(prev => [...prev, { 
             role: 'assistant', 
             content: `Insufficient balance. You need $${totalCost.toFixed(2)} but only have $${profile.balance.toFixed(2)}`,
-            id: Date.now().toString()
+            id: generateMessageId()
           }]);
           setPendingAction(null);
           return;
@@ -2277,7 +2283,7 @@ export default function DashboardPage() {
         setMessages(prev => [...prev, { 
           role: 'assistant', 
           content: `Insufficient balance. You need $${totalCost.toFixed(2)} but only have $${profile.balance.toFixed(2)}`,
-          id: Date.now().toString()
+          id: generateMessageId()
         }]);
         setPendingAction(null);
         return;
@@ -2290,7 +2296,7 @@ export default function DashboardPage() {
       setMessages(prev => [...prev, { 
         role: 'assistant', 
         content: `Failed to execute purchase: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
-        id: Date.now().toString()
+        id: generateMessageId()
       }]);
       setPendingAction(null);
     } finally {
@@ -2382,7 +2388,7 @@ export default function DashboardPage() {
       setMessages(prev => [...prev, { 
         role: 'assistant', 
         content: `✅ Successfully bought ${shares} shares of ${symbol} at $${price.toFixed(2)} per share for a total of $${totalCost.toFixed(2)}`,
-        id: Date.now().toString()
+        id: generateMessageId()
       }]);
       
       // Clear pending action
@@ -2523,7 +2529,7 @@ export default function DashboardPage() {
     setMessages(prev => [...prev, { 
       role: 'assistant', 
       content: 'Purchase cancelled.',
-      id: Date.now().toString()
+      id: generateMessageId()
     }]);
   };
 
@@ -2835,9 +2841,9 @@ export default function DashboardPage() {
                 {/* Chat Messages */}
                 <div className="w-full max-w-md flex-1 overflow-y-auto px-4 space-y-4 mb-4">
                   {messages.map((message) => (
-                    <div key={message.id} className={`${message.role === 'user' ? 'ml-auto' : 'mr-auto'} max-w-[80%] group`}>
+                    <div key={message.id} className={`${message.role === 'user' ? 'ml-auto' : 'mr-auto'} max-w-[80%] group`}>  
                       {/* Toolbar above assistant messages */}
-                        {message.role === 'assistant' && (
+                      {message.role === 'assistant' && (
                         <div className="flex space-x-1 mb-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={() => copyToClipboard(message.content)}
