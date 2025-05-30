@@ -2134,6 +2134,49 @@ export default function DashboardPage() {
         return;
       }
 
+      // Check if it's a sell request
+      const sellRequest = parseSellRequest(userMessage);
+      if (sellRequest) {
+        setThinkingState(null);
+        // Check if user owns the stock
+        const portfolioItem = portfolio.find(item => item.symbol === sellRequest.symbol);
+        if (!portfolioItem) {
+          setMessages(prev => [...prev, { 
+            role: 'assistant', 
+            content: `You don't own any shares of ${sellRequest.symbol}.`,
+            id: generateMessageId()
+          }]);
+          setIsLoading(false);
+          return;
+        }
+        if (portfolioItem.shares < sellRequest.shares) {
+          setMessages(prev => [...prev, { 
+            role: 'assistant', 
+            content: `You only own ${portfolioItem.shares} shares of ${sellRequest.symbol}. You can't sell ${sellRequest.shares} shares.`,
+            id: generateMessageId()
+          }]);
+          setIsLoading(false);
+          return;
+        }
+        
+        // Handle sell request without streaming
+        setMessages(prev => [...prev, { 
+          role: 'assistant', 
+          content: `You asked me to sell ${sellRequest.shares} shares of ${sellRequest.symbol}. Would you like to confirm this sale?`,
+          id: generateMessageId()
+        }]);
+        
+        setPendingAction({
+          type: 'sell_stock',
+          symbol: sellRequest.symbol,
+          shares: sellRequest.shares
+        });
+        setConfirmationMessage(`You asked me to sell ${sellRequest.shares} shares of ${sellRequest.symbol}. Would you like to confirm this sale?`);
+        setEditableShares(sellRequest.shares);
+        setIsLoading(false);
+        return;
+      }
+
       // For regular chat, use streaming
       setTimeout(() => {
         if (isLoading) setThinkingState('reasoning');
@@ -2221,7 +2264,7 @@ export default function DashboardPage() {
     
     setIsLoading(true);
     try {
-      console.log('Starting purchase:', { pendingAction, editableShares });
+      console.log('Starting action:', { pendingAction, editableShares });
       
       // Fetch current stock price
       const alphaVantageKey = process.env.NEXT_PUBLIC_ALPHA_VANTAGE_KEY;
@@ -2251,20 +2294,22 @@ export default function DashboardPage() {
           id: generateMessageId()
         }]);
         
-        const totalCost = mockPrice * editableShares;
+        const totalValue = mockPrice * editableShares;
         
-        // Check if user has sufficient balance
-        if (profile.balance < totalCost) {
-          setMessages(prev => [...prev, { 
-            role: 'assistant', 
-            content: `Insufficient balance. You need $${totalCost.toFixed(2)} but only have $${profile.balance.toFixed(2)}`,
-            id: generateMessageId()
-          }]);
-          setPendingAction(null);
-          return;
+        if (pendingAction.type === 'buy_stock') {
+          // Check if user has sufficient balance for buy
+          if (profile.balance < totalValue) {
+            setMessages(prev => [...prev, { 
+              role: 'assistant', 
+              content: `Insufficient balance. You need $${totalValue.toFixed(2)} but only have $${profile.balance.toFixed(2)}`,
+              id: generateMessageId()
+            }]);
+            setPendingAction(null);
+            return;
+          }
         }
         
-        await executeTrade(pendingAction.symbol, editableShares, mockPrice, totalCost);
+        await executeTrade(pendingAction.symbol, editableShares, mockPrice, totalValue, pendingAction.type);
         return;
       }
       
@@ -2275,27 +2320,29 @@ export default function DashboardPage() {
         throw new Error('Invalid price data received');
       }
       
-      const totalCost = currentPrice * editableShares;
-      console.log('Total cost:', totalCost);
+      const totalValue = currentPrice * editableShares;
+      console.log('Total value:', totalValue);
       
-      // Check if user has sufficient balance
-      if (profile.balance < totalCost) {
-        setMessages(prev => [...prev, { 
-          role: 'assistant', 
-          content: `Insufficient balance. You need $${totalCost.toFixed(2)} but only have $${profile.balance.toFixed(2)}`,
-          id: generateMessageId()
-        }]);
-        setPendingAction(null);
-        return;
+      if (pendingAction.type === 'buy_stock') {
+        // Check if user has sufficient balance for buy
+        if (profile.balance < totalValue) {
+          setMessages(prev => [...prev, { 
+            role: 'assistant', 
+            content: `Insufficient balance. You need $${totalValue.toFixed(2)} but only have $${profile.balance.toFixed(2)}`,
+            id: generateMessageId()
+          }]);
+          setPendingAction(null);
+          return;
+        }
       }
       
-      await executeTrade(pendingAction.symbol, editableShares, currentPrice, totalCost);
+      await executeTrade(pendingAction.symbol, editableShares, currentPrice, totalValue, pendingAction.type);
       
     } catch (error) {
-      console.error('Error executing purchase:', error);
+      console.error('Error executing trade:', error);
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: `Failed to execute purchase: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
+        content: `Failed to execute trade: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
         id: generateMessageId()
       }]);
       setPendingAction(null);
@@ -2305,19 +2352,23 @@ export default function DashboardPage() {
   };
 
   // Helper function to execute the actual trade
-  const executeTrade = async (symbol: string, shares: number, price: number, totalCost: number) => {
+  const executeTrade = async (symbol: string, shares: number, price: number, totalValue: number, type: 'buy_stock' | 'sell_stock') => {
     if (!profile?.id) {
       throw new Error('User profile not available');
     }
     
     try {
-      console.log('Executing trade:', { symbol, shares, price, totalCost });
+      console.log('Executing trade:', { symbol, shares, price, totalValue, type });
       const currentProfile = profile;
        
       // Update user's balance
+      const newBalance = type === 'buy_stock' 
+        ? currentProfile.balance - totalValue 
+        : currentProfile.balance + totalValue;
+
       const { error: balanceError } = await supabase
         .from('profiles')
-        .update({ balance: currentProfile.balance - totalCost })
+        .update({ balance: newBalance })
         .eq('id', currentProfile.id);
         
       if (balanceError) {
@@ -2342,52 +2393,92 @@ export default function DashboardPage() {
       
       console.log('Existing position:', existingPosition);
       
-      if (existingPosition) {
-        // Update existing position
-        const newShares = existingPosition.shares + shares;
-        const newAveragePrice = ((existingPosition.average_price * existingPosition.shares) + (price * shares)) / newShares;
-        
-        const { error: updateError } = await supabase
-          .from('portfolio')
-          .update({
-            shares: newShares,
-            average_price: newAveragePrice
-          })
-          .eq('user_id', currentProfile.id)
-          .eq('symbol', symbol);
+      if (type === 'buy_stock') {
+        if (existingPosition) {
+          // Update existing position
+          const newShares = existingPosition.shares + shares;
+          const newAveragePrice = ((existingPosition.average_price * existingPosition.shares) + (price * shares)) / newShares;
           
-        if (updateError) {
-          console.error('Portfolio update error:', updateError);
-          throw new Error(`Failed to update portfolio: ${updateError.message}`);
+          const { error: updateError } = await supabase
+            .from('portfolio')
+            .update({
+              shares: newShares,
+              average_price: newAveragePrice
+            })
+            .eq('user_id', currentProfile.id)
+            .eq('symbol', symbol);
+            
+          if (updateError) {
+            console.error('Portfolio update error:', updateError);
+            throw new Error(`Failed to update portfolio: ${updateError.message}`);
+          }
+          
+          console.log('Portfolio position updated');
+        } else {
+          // Create new position
+          const { error: insertError } = await supabase
+            .from('portfolio')
+            .insert({
+              user_id: currentProfile.id,
+              symbol: symbol,
+              shares: shares,
+              average_price: price
+            });
+            
+          if (insertError) {
+            console.error('Portfolio insert error:', insertError);
+            throw new Error(`Failed to create portfolio position: ${insertError.message}`);
+          }
+          
+          console.log('New portfolio position created');
+        }
+      } else { // sell_stock
+        if (!existingPosition) {
+          throw new Error(`You don't own any shares of ${symbol}`);
         }
         
-        console.log('Portfolio position updated');
-      } else {
-        // Create new position
-        const { error: insertError } = await supabase
-          .from('portfolio')
-          .insert({
-            user_id: currentProfile.id,
-            symbol: symbol,
-            shares: shares,
-            average_price: price
-          });
-          
-        if (insertError) {
-          console.error('Portfolio insert error:', insertError);
-          throw new Error(`Failed to create portfolio position: ${insertError.message}`);
+        if (existingPosition.shares < shares) {
+          throw new Error(`You only own ${existingPosition.shares} shares of ${symbol}`);
         }
         
-        console.log('New portfolio position created');
+        const remainingShares = existingPosition.shares - shares;
+        
+        if (remainingShares > 0) {
+          // Update existing position
+          const { error: updateError } = await supabase
+            .from('portfolio')
+            .update({
+              shares: remainingShares
+            })
+            .eq('user_id', currentProfile.id)
+            .eq('symbol', symbol);
+            
+          if (updateError) {
+            console.error('Portfolio update error:', updateError);
+            throw new Error(`Failed to update portfolio: ${updateError.message}`);
+          }
+        } else {
+          // Delete position if selling all shares
+          const { error: deleteError } = await supabase
+            .from('portfolio')
+            .delete()
+            .eq('user_id', currentProfile.id)
+            .eq('symbol', symbol);
+            
+          if (deleteError) {
+            console.error('Portfolio delete error:', deleteError);
+            throw new Error(`Failed to delete portfolio position: ${deleteError.message}`);
+          }
+        }
       }
       
       // Update profile state
-      setProfile(prev => prev ? { ...prev, balance: currentProfile.balance - totalCost } : prev);
+      setProfile(prev => prev ? { ...prev, balance: newBalance } : prev);
       
       // Add success message
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: `✅ Successfully bought ${shares} shares of ${symbol} at $${price.toFixed(2)} per share for a total of $${totalCost.toFixed(2)}`,
+        content: `✅ Successfully ${type === 'buy_stock' ? 'bought' : 'sold'} ${shares} shares of ${symbol} at $${price.toFixed(2)} per share for a total of $${totalValue.toFixed(2)}`,
         id: generateMessageId()
       }]);
       
@@ -2401,7 +2492,7 @@ export default function DashboardPage() {
       await refreshPortfolioData();
       
     } catch (error) {
-      // Re-throw error to be caught by handleConfirmPurchase
+      console.error('Error executing trade:', error);
       throw error;
     }
   };
@@ -2546,6 +2637,26 @@ export default function DashboardPage() {
     ];
 
     for (const pattern of buyPatterns) {
+      const match = message.match(pattern);
+      if (match) {
+        return {
+          shares: parseInt(match[1]),
+          symbol: match[2].toUpperCase()
+        };
+      }
+    }
+    return null;
+  };
+
+  // Function to parse sell requests (same as API)
+  const parseSellRequest = (message: string) => {
+    const sellPatterns = [
+      /sell\s+(\d+)\s+(?:shares?\s+of\s+|stocks?\s+of\s+)?([a-zA-Z]+)/i,
+      /liquidate\s+(\d+)\s+(?:shares?\s+of\s+|stocks?\s+of\s+)?([a-zA-Z]+)/i,
+      /dispose\s+(\d+)\s+(?:shares?\s+of\s+|stocks?\s+of\s+)?([a-zA-Z]+)/i
+    ];
+
+    for (const pattern of sellPatterns) {
       const match = message.match(pattern);
       if (match) {
         return {
@@ -2832,157 +2943,289 @@ export default function DashboardPage() {
 
           {/* ChatGPT Copilot Section */}
           <div className="fixed right-0 top-0 w-[500px] h-screen bg-gradient-to-br from-[#181c2a] via-[#23294a] to-[#1a1d2b] shadow-xl flex flex-col border-l border-gray-700 overflow-y-auto">
-            <div className="flex-1 flex flex-col justify-start items-center pt-12">
+            <div className="flex-1 flex flex-col justify-start items-center pt-50">
               <div className="w-full flex flex-col items-center">
                 {/* Title */}
                 <h1 className="text-6xl font-extrabold bg-gradient-to-r from-green-400 via-blue-400 to-purple-400 bg-clip-text text-transparent mb-6 text-center">CoPilot</h1>
                 <p className="text-lg text-gray-200 mb-10 text-center font-medium">All of stocks and crypto, one trusted assistant</p>
                 
-                {/* Chat Messages */}
-                <div className="w-full max-w-md flex-1 overflow-y-auto px-4 space-y-4 mb-4">
-                  {messages.map((message) => (
-                    <div key={message.id} className={`${message.role === 'user' ? 'ml-auto' : 'mr-auto'} max-w-[80%] group`}>  
-                      {/* Toolbar above assistant messages */}
-                      {message.role === 'assistant' && (
-                        <div className="flex space-x-1 mb-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => copyToClipboard(message.content)}
-                            className="p-1 rounded bg-gray-800 hover:bg-gray-700"
-                            aria-label="Copy message"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => handleRewrite(message.content)}
-                            className="p-1 rounded bg-gray-800 hover:bg-gray-700"
-                            aria-label="Rewrite message"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.5 2.5l3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                            </svg>
-                          </button>
-                        </div>
-                      )}
-                      <div className={`rounded-xl p-4 ${
-                        message.role === 'user' 
-                          ? 'bg-gray-700 text-white' 
-                          : 'bg-[#23294a] text-white'
-                      }`}>
-                        <div className="prose prose-invert max-w-none break-words whitespace-pre-wrap">
-                          {message.content.split('\n').map((line, i) => (
-                            <p key={i} className="mb-2 last:mb-0">{line}</p>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  
-                  {streamingMessage && (
-                    <div className="mr-auto max-w-[80%]">
-                      <div className="bg-[#23294a] rounded-xl p-4 text-white">
-                        <div className="prose prose-invert max-w-none break-words whitespace-pre-wrap">
-                          {streamingMessage.split('\n').map((line, i) => (
-                            <p key={i} className="mb-2 last:mb-0">{line}</p>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {(isLoading && !streamingMessage) || thinkingState ? (
-                    <div className="mr-auto max-w-[80%]">
-                      <div className="bg-[#23294a] rounded-xl p-4 text-white">
-                        <div className="flex items-center space-x-2">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                          <span className="animated-thinking-text">
-                            {thinkingState === 'thinking' && 'Thinking...'}
-                            {thinkingState === 'reasoning' && 'Reasoning...'}
-                            {!thinkingState && 'Loading...'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ):(
-                    <div ref={messagesEndRef} />
-                  )}
-                  <div ref={messagesEndRef} />
-                </div>
-
-                {/* Confirmation UI */}
-                {pendingAction && (
-                  <div className="w-full max-w-md px-4 mb-4">
-                    <div className="bg-[#23294a] border border-yellow-400 rounded-xl p-4">
-                      <h3 className="text-yellow-400 font-semibold mb-3">Confirm Purchase</h3>
-                      <p className="text-white mb-4">{confirmationMessage}</p>
-                      
-                      <div className="flex items-center gap-3 mb-4">
-                        <label className="text-white">Shares:</label>
-                        <input
-                          type="number"
-                          value={editableShares}
-                          onChange={(e) => handleUpdateShares(parseInt(e.target.value) || 0)}
-                          className="bg-gray-700 text-white px-3 py-1 rounded border border-gray-600 w-20"
-                          min="1"
+                {/* Show suggestions when no messages */}
+                {messages.length === 0 ? (
+                  <div className="w-full max-w-md px-4 space-y-6 mb-8">
+                    {/* Input Form */}
+                    <form onSubmit={handleSubmit} className="w-full mb-6">
+                      <div className="relative">
+                        <textarea
+                          ref={textareaRef}
+                          value={input}
+                          onChange={(e) => setInput(e.target.value)}
+                          onInput={(e) => {
+                            e.currentTarget.style.height = 'auto';
+                            e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
+                          }}
+                          placeholder="Start with a question"
+                          className="w-full bg-[#23294a] text-white rounded-xl px-6 py-4 pr-12 focus:outline-none focus:ring-2 focus:ring-green-400 text-lg shadow-lg placeholder-shine resize-none overflow-hidden"
                         />
-                        <span className="text-gray-400">of {pendingAction.symbol}</span>
-                      </div>
-                      
-                      <div className="flex gap-3">
-                        <button
-                          onClick={handleConfirmPurchase}
-                          disabled={isLoading || editableShares <= 0}
-                          className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-semibold transition-colors"
+                        <button 
+                          type="submit"
+                          disabled={isLoading || !input.trim()}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 bg-white text-black p-2 rounded-full hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {isLoading ? 'Processing...' : 'Buy'}
-                        </button>
-                        <button
-                          onClick={handleCancelPurchase}
-                          disabled={isLoading}
-                          className="flex-1 bg-gray-600 hover:bg-gray-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-semibold transition-colors"
-                        >
-                          Cancel
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l7-7 7 7" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19V6" />
+                          </svg>
                         </button>
                       </div>
+                    </form>
+
+                    {/* Suggestion Buttons */}
+                    <div className="w-full grid grid-cols-2 gap-4 mt-6 mb-6">
+                      <button
+                        onClick={() => setInput("What's the current market trend for AAPL?")}
+                        className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-blue-500 hover:border-blue-400 text-left shadow-lg"
+                      >
+                        <div className="font-semibold text-blue-400 mb-2">Market Trend Analysis</div>
+                        <div className="text-xs text-gray-300">What's the current market trend for AAPL?</div>
+                      </button>
+                      <button
+                        onClick={() => setInput("Show me the best performing stocks this week")}
+                        className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-green-500 hover:border-green-400 text-left shadow-lg"
+                      >
+                        <div className="font-semibold text-green-400 mb-2">Top Performers</div>
+                        <div className="text-xs text-gray-300">Show me the best performing stocks this week</div>
+                      </button>
+                      <button
+                        onClick={() => setInput("What are the key financial metrics for MSFT?")}
+                        className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-purple-500 hover:border-purple-400 text-left shadow-lg"
+                      >
+                        <div className="font-semibold text-purple-400 mb-2">Financial Analysis</div>
+                        <div className="text-xs text-gray-300">What are the key finacial metrics for MSFT?</div>
+                      </button>
+                      <button
+                        onClick={() => setInput("Compare the performance of TSLA and RIVN")}
+                        className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-yellow-500 hover:border-yellow-400 text-left shadow-lg"
+                      >
+                        <div className="font-semibold text-yellow-400 mb-2">Stock Comparison</div>
+                        <div className="text-xs text-gray-300">Compare the performance of TSLA and RIVN</div>
+                      </button>
+                    </div>
+
+                    {/* Suggestion Cards */}
+                    <div className="space-y-4">
+                      <div className="text-gray-400 text-center mb-4">Or pick a question to see the power of SimuTrader CoPilot</div>
                     </div>
                   </div>
-                )}
+                ) : (
+                  <>
+                    {/* Chat Messages */}
+                    <div className="w-full max-w-md flex-1 overflow-y-auto px-4 space-y-4 mb-4">
+                      {messages.length === 1 ? (
+                        <>
+                     
 
-                {/* Input Form */}
-                <form onSubmit={handleSubmit} className="w-full max-w-md px-4 mb-8">
-                  <div className="relative">
-                    <textarea
-                      ref={textareaRef}
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      onInput={(e) => {
-                        e.currentTarget.style.height = 'auto';
-                        e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
-                      }}
-                      rows={1}
-                      placeholder="Start with a question"
-                      className="w-full bg-[#23294a] text-white rounded-xl px-6 py-4 pr-12 focus:outline-none focus:ring-2 focus:ring-green-400 text-lg shadow-lg placeholder-shine resize-none overflow-hidden"
-                    />
-                    <button 
-                      type="submit"
-                      disabled={isLoading || !input.trim()}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 bg-white text-black p-2 rounded-full hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l7-7 7 7" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19V6" />
-                      </svg>
-                    </button>
-                  </div>
-                </form>
+                      
+
+                   
+
+                    
+
+                         
+                            
+
+                          {/* See More Button */}
+                          
+                        </>
+                      ) : (
+                        <>
+                          {messages.map((message) => (
+                            <div key={message.id} className={`${message.role === 'user' ? 'ml-auto' : 'mr-auto'} max-w-[80%] group`}>
+                              {/* Toolbar above assistant messages */}
+                              {message.role === 'assistant' && (
+                                <div className="flex space-x-1 mb-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button
+                                    onClick={() => copyToClipboard(message.content)}
+                                    className="p-1 rounded bg-gray-800 hover:bg-gray-700"
+                                    aria-label="Copy message"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                                    </svg>
+                                  </button>
+                                  <button
+                                    onClick={() => handleRewrite(message.content)}
+                                    className="p-1 rounded bg-gray-800 hover:bg-gray-700"
+                                    aria-label="Rewrite message"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.5 2.5l3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              )}
+                              <div className={`rounded-xl p-4 ${
+                                message.role === 'user' 
+                                  ? 'bg-gray-700 text-white' 
+                                  : 'bg-[#23294a] text-white'
+                              }`}>
+                                <div className="prose prose-invert max-w-none break-words whitespace-pre-wrap">
+                                  {message.content.split('\n').map((line, i) => (
+                                    <p key={i} className="mb-2 last:mb-0">{line}</p>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          {streamingMessage && (
+                            <div className="mr-auto max-w-[80%]">
+                              <div className="bg-[#23294a] rounded-xl p-4 text-white">
+                                <div className="prose prose-invert max-w-none break-words whitespace-pre-wrap">
+                                  {streamingMessage.split('\n').map((line, i) => (
+                                    <p key={i} className="mb-2 last:mb-0">{line}</p>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {(isLoading && !streamingMessage) || thinkingState ? (
+                            <div className="mr-auto max-w-[80%]">
+                              <div className="bg-[#23294a] rounded-xl p-4 text-white">
+                                <div className="flex items-center space-x-2">
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                  <span className="animated-thinking-text">
+                                    {thinkingState === 'thinking' && 'Thinking...'}
+                                    {thinkingState === 'reasoning' && 'Reasoning...'}
+                                    {!thinkingState && 'Loading...'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          ):(
+                            <div ref={messagesEndRef} />
+                          )}
+                          <div ref={messagesEndRef} />
+                        </>
+                      )}
+                    </div>
+
+                    {/* Confirmation UI */}
+                    {pendingAction && (
+                      <div className="w-full max-w-md px-4 mb-4">
+                        <div className="bg-[#23294a] border border-yellow-400 rounded-xl p-4">
+                          <h3 className="text-yellow-400 font-semibold mb-3">
+                            {pendingAction.type === 'buy_stock' ? 'Confirm Purchase' : 'Confirm Sale'}
+                          </h3>
+                          <p className="text-white mb-4">{confirmationMessage}</p>
+                          
+                          <div className="flex items-center gap-3 mb-4">
+                            <label className="text-white">Shares:</label>
+                            <input
+                              type="number"
+                              value={editableShares}
+                              onChange={(e) => handleUpdateShares(parseInt(e.target.value) || 0)}
+                              className="bg-gray-700 text-white px-3 py-1 rounded border border-gray-600 w-20"
+                              min="1"
+                            />
+                            <span className="text-gray-400">of {pendingAction.symbol}</span>
+                          </div>
+                          
+                          <div className="flex gap-3">
+                            <button
+                              onClick={handleConfirmPurchase}
+                              disabled={isLoading || editableShares <= 0}
+                              className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-semibold transition-colors"
+                            >
+                              {isLoading ? 'Processing...' : pendingAction.type === 'buy_stock' ? 'Buy' : 'Sell'}
+                            </button>
+                            <button
+                              onClick={handleCancelPurchase}
+                              disabled={isLoading}
+                              className="flex-1 bg-gray-600 hover:bg-gray-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-semibold transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Input Form - shown at bottom when there are messages */}
+                    <form onSubmit={handleSubmit} className="w-full max-w-md px-4 mb-8">
+                      <div className="relative">
+                        <textarea
+                          ref={textareaRef}
+                          value={input}
+                          onChange={(e) => setInput(e.target.value)}
+                          onInput={(e) => {
+                            e.currentTarget.style.height = 'auto';
+                            e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
+                          }}
+                          rows={1}
+                          placeholder="Start with a question"
+                          className="w-full bg-[#23294a] text-white rounded-xl px-6 py-4 pr-12 focus:outline-none focus:ring-2 focus:ring-green-400 text-lg shadow-lg placeholder-shine resize-none overflow-hidden"
+                        />
+                        <button 
+                          type="submit"
+                          disabled={isLoading || !input.trim()}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 bg-white text-black p-2 rounded-full hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l7-7 7 7" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19V6" />
+                          </svg>
+                        </button>
+                      </div>
+                    </form>
+
+                    {/* Suggestion Buttons 2x2 Grid - only when messages.length === 1 */}
+                    {messages.length === 1 && (
+                      <div className="w-full max-w-md px-4 mb-8">
+                        <div className="grid grid-cols-2 gap-4">
+                          <button
+                            onClick={() => setInput("Which cryptocurrencies have gained more than 20% this week?")}
+                            className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-green-400/50 hover:border-green-400 text-left shadow-lg"
+                          >
+                            <div className="font-semibold text-green-400 mb-2">🪙 Crypto</div>
+                            <div className="text-xs text-gray-300">Which cryptocurrencies have gained more than 20% this week?</div>
+                          </button>
+                          <button
+                            onClick={() => setInput("What's the latest news affecting the stock market today?")}
+                            className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-yellow-400/50 hover:border-yellow-400 text-left shadow-lg"
+                          >
+                            <div className="font-semibold text-yellow-400 mb-2">📰 News</div>
+                            <div className="text-xs text-gray-300">What's the latest news affecting the stock market today?</div>
+                          </button>
+                          <button
+                            onClick={() => setInput("What are the top performing stocks today?")}
+                            className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-blue-400/50 hover:border-blue-400 text-left shadow-lg"
+                          >
+                            <div className="font-semibold text-blue-400 mb-2">📈 Performance</div>
+                            <div className="text-xs text-gray-300">What are the top performing stocks today?</div>
+                          </button>
+                          <button
+                            onClick={() => setInput("What are the key financial metrics for MSFT?")}
+                            className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-purple-400/50 hover:border-purple-400 text-left shadow-lg"
+                          >
+                            <div className="font-semibold text-purple-400 mb-2">📊 Metrics</div>
+                            <div className="text-xs text-gray-300">What are the key financial metrics for MSFT?</div>
+                          </button>
+                        </div>
+                        <div className="mt-6 flex justify-center">
+                          <button className="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white font-semibold hover:opacity-90 transition-opacity duration-200">
+                            See More Suggestions
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           </div>
 
           {/* ChatGPT-style Search Bar */}
-          <div className="w-full max-w-3xl mb-8">
+          <div className="w-full max-w-3xl mb-8 mt-7">
             <div className="relative">
               <input
                 type="text"
@@ -3044,6 +3287,40 @@ export default function DashboardPage() {
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Search Suggestions */}
+            <div className="mt-6 grid grid-cols-2 gap-4">
+              {/* Suggestion Box 1 */}
+              <div className="p-4 bg-gray-800/50 rounded-xl border-2 border-blue-400/50 hover:border-blue-400 transition-all duration-200 cursor-pointer">
+                <h3 className="text-lg font-semibold text-white mb-2">Popular Stocks</h3>
+                <p className="text-gray-400 text-sm">AAPL, MSFT, GOOGL, AMZN, TSLA</p>
+              </div>
+
+              {/* Suggestion Box 2 */}
+              <div className="p-4 bg-gray-800/50 rounded-xl border-2 border-purple-400/50 hover:border-purple-400 transition-all duration-200 cursor-pointer">
+                <h3 className="text-lg font-semibold text-white mb-2">Top Gainers</h3>
+                <p className="text-gray-400 text-sm">NVDA, AMD, META, NFLX, PYPL</p>
+              </div>
+
+              {/* Suggestion Box 3 */}
+              <div className="p-4 bg-gray-800/50 rounded-xl border-2 border-green-400/50 hover:border-green-400 transition-all duration-200 cursor-pointer">
+                <h3 className="text-lg font-semibold text-white mb-2">Market Leaders</h3>
+                <p className="text-gray-400 text-sm">JPM, V, MA, BAC, WMT</p>
+              </div>
+
+              {/* Suggestion Box 4 */}
+              <div className="p-4 bg-gray-800/50 rounded-xl border-2 border-yellow-400/50 hover:border-yellow-400 transition-all duration-200 cursor-pointer">
+                <h3 className="text-lg font-semibold text-white mb-2">Trending ETFs</h3>
+                <p className="text-gray-400 text-sm">SPY, QQQ, VTI, ARKK, VOO</p>
+              </div>
+            </div>
+
+            {/* See More Button */}
+            <div className="mt-6 flex justify-center">
+              <button className="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white font-semibold hover:opacity-90 transition-opacity duration-200">
+                See More Suggestions
+              </button>
             </div>
           </div>
 

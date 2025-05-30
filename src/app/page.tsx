@@ -52,7 +52,7 @@ export default function LoginPage() {
   const heroSections = [
     {
       title: "Master the Market",
-      subtitle: "Practice trading with virtual money. Learn strategies, analyze trends, and build confidence before investing real capital. Join thousands of traders who started their journey with SimuTrader.",
+      subtitle: "Practice trading with virtual money. Learn strategies, analyze trends, and build confidence before investing real capital. Join thousands of traders who started their journey with SimuTrader AI.",
       features: [
         {
           icon: (
@@ -60,18 +60,18 @@ export default function LoginPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
             </svg>
           ),
-          title: "$10,000 Starting Balance",
-          description: "Begin with virtual funds to practice risk-free trading and portfolio management.",
+          title: "30,000+ Assets",
+          description: "Trade stocks, ETFs, mutual funds, and 2,000+ cryptocurrencies with real-time data.",
           bgColor: "bg-green-500/20"
         },
         {
           icon: (
             <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
             </svg>
           ),
-          title: "Real Market Data",
-          description: "Access live prices, market news, and financial data from real stock exchanges.",
+          title: "AI-Powered Insights",
+          description: "Integrated RAG system using GPT-4o and Claude 3.5 for natural language queries and trade execution.",
           bgColor: "bg-blue-500/20"
         },
         {
@@ -81,7 +81,7 @@ export default function LoginPage() {
             </svg>
           ),
           title: "Advanced Analytics",
-          description: "Track performance with detailed charts, profit/loss analysis, and portfolio metrics.",
+          description: "Live sentiment analysis, news insights, and comprehensive portfolio metrics.",
           bgColor: "bg-purple-500/20"
         },
         {
@@ -90,25 +90,25 @@ export default function LoginPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
             </svg>
           ),
-          title: "Social Trading",
-          description: "Connect with other traders, share strategies, and learn from the community.",
+          title: "Local & Private",
+          description: "Runs entirely on your machine with local data storage and multi-user support.",
           bgColor: "bg-orange-500/20"
         }
       ],
       additionalFeatures: [
-        "Portfolio diversification tools",
-        "Risk management features",
-        "Market sentiment analysis",
-        "Cryptocurrency trading",
-        "Social trading community",
-        "Tax reporting assistance",
-        "Futures and options trading",
-        "AI-powered insights"
+        "Futures trading simulation",
+        "Crypto wallet tracking",
+        "DRIP investing support",
+        "Automated risk management",
+        "Tax-aware portfolio logic",
+        "Real-time market data",
+        "Multi-user local support",
+        "Free API integration"
       ],
       stats: [
-        { value: "50K+", label: "Active Traders" },
-        { value: "$2B+", label: "Virtual Volume Traded" },
-        { value: "98%", label: "User Satisfaction" }
+        { value: "30K+", label: "Tradable Assets" },
+        { value: "2K+", label: "Cryptocurrencies" },
+        { value: "100%", label: "Local & Free" }
       ]
     },
     {
@@ -131,8 +131,8 @@ export default function LoginPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
             </svg>
           ),
-          title: "Automated Stop Loss",
-          description: "Set intelligent stop-loss orders with trailing stops and risk percentage limits.",
+          title: "Risk Management",
+          description: "Automated stop-losses, portfolio rebalancing, and diversification metrics.",
           bgColor: "bg-red-500/20"
         },
         {
@@ -141,8 +141,8 @@ export default function LoginPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
             </svg>
           ),
-          title: "Tax Optimization",
-          description: "Automatic tax-loss harvesting and comprehensive reporting for all trading activities.",
+          title: "Tax Logic",
+          description: "Realistic tax calculations, P&L tracking, and capital gains simulation.",
           bgColor: "bg-green-500/20"
         },
         {
@@ -151,30 +151,30 @@ export default function LoginPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
             </svg>
           ),
-          title: "Smart Algorithms",
-          description: "AI-powered trading suggestions and automated portfolio rebalancing.",
+          title: "Market Insights",
+          description: "Live sentiment analysis and news insights for individual equities and sectors.",
           bgColor: "bg-blue-500/20"
         }
       ],
       additionalFeatures: [
-        "Margin trading simulation",
-        "Options strategies builder",
-        "Cryptocurrency futures",
-        "Risk assessment tools",
-        "Advanced order types",
-        "Portfolio optimization",
+        "Portfolio diversification tools",
+        "Risk assessment metrics",
+        "Market sentiment analysis",
+        "Crypto portfolio tracking",
+        "DRIP investment simulation",
         "Tax-loss harvesting",
-        "Regulatory compliance"
+        "Multi-user support",
+        "Local data storage"
       ],
       stats: [
         { value: "24/7", label: "Market Access" },
-        { value: "100ms", label: "Order Execution" },
-        { value: "99.9%", label: "System Uptime" }
+        { value: "100%", label: "Local Data" },
+        { value: "0%", label: "Ads & Paywalls" }
       ]
     },
     {
       title: "Learn While Trading",
-      subtitle: "Comprehensive educational resources to transform you from beginner to expert trader. Interactive courses, market analysis, and real-world case studies from industry professionals.",
+      subtitle: "Built-in educational features help you understand trading concepts, market dynamics, and investment strategies. Learn through hands-on experience with real market data.",
       features: [
         {
           icon: (
@@ -182,8 +182,8 @@ export default function LoginPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
             </svg>
           ),
-          title: "Interactive Courses",
-          description: "Step-by-step lessons covering everything from basics to advanced trading strategies.",
+          title: "Info Bubbles",
+          description: "Learn about trading terms and concepts with built-in explanations and examples.",
           bgColor: "bg-purple-500/20"
         },
         {
@@ -192,8 +192,8 @@ export default function LoginPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
             </svg>
           ),
-          title: "Market Analysis",
-          description: "Learn technical and fundamental analysis with real-time market examples.",
+          title: "AI Guidance",
+          description: "Get help understanding trading strategies and risk management from CoPilot.",
           bgColor: "bg-indigo-500/20"
         },
         {
@@ -202,8 +202,8 @@ export default function LoginPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
             </svg>
           ),
-          title: "Expert Mentorship",
-          description: "Connect with professional traders for personalized guidance and feedback.",
+          title: "Multi-User",
+          description: "Multiple users can manage their own portfolios on the same machine.",
           bgColor: "bg-pink-500/20"
         },
         {
@@ -212,25 +212,25 @@ export default function LoginPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
             </svg>
           ),
-          title: "Certification Program",
-          description: "Earn recognized trading certifications to validate your knowledge and skills.",
+          title: "Free APIs",
+          description: "Uses free-tier API services like Alpha Vantage, CoinGecko, and more",
           bgColor: "bg-teal-500/20"
         }
       ],
       additionalFeatures: [
-        "Video tutorials library",
-        "Trading psychology courses",
-        "Risk management training",
-        "Market simulation exercises",
-        "Weekly live webinars",
-        "Community study groups",
-        "Progress tracking system",
-        "Mobile learning app"
+        "Built-in term explanations",
+        "Real-time market data",
+        "Portfolio analytics",
+        "Risk management tools",
+        "Tax calculation guides",
+        "Market news integration",
+        "Local data storage",
+        "Open source code"
       ],
       stats: [
-        { value: "200+", label: "Course Modules" },
-        { value: "15K+", label: "Students Graduated" },
-        { value: "4.9★", label: "Average Rating" }
+        { value: "100%", label: "Free & Open" },
+        { value: "0%", label: "Ads" },
+        { value: "MIT", label: "License" }
       ]
     }
   ];
@@ -274,66 +274,57 @@ export default function LoginPage() {
           
           {/* Animated Lines */}
           <div className="absolute inset-0">
-            <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-blue-500/40 to-transparent animate-[scan_2s_linear_infinite]"></div>
-            <div className="absolute top-1/4 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-green-500/40 to-transparent animate-[scan_3s_linear_infinite]"></div>
-            <div className="absolute top-2/4 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-purple-500/40 to-transparent animate-[scan_2.5s_linear_infinite]"></div>
-            <div className="absolute top-3/4 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-blue-500/40 to-transparent animate-[scan_1.5s_linear_infinite]"></div>
-            <div className="absolute top-1/3 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-yellow-500/40 to-transparent animate-[scan_4s_linear_infinite]"></div>
-            <div className="absolute top-2/3 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-red-500/40 to-transparent animate-[scan_3.5s_linear_infinite]"></div>
+            <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-blue-500/60 to-transparent animate-[scan_2s_linear_infinite]"></div>
+            <div className="absolute top-1/4 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-green-500/60 to-transparent animate-[scan_3s_linear_infinite]"></div>
+            <div className="absolute top-2/4 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-purple-500/60 to-transparent animate-[scan_2.5s_linear_infinite]"></div>
+            <div className="absolute top-3/4 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-blue-500/60 to-transparent animate-[scan_1.5s_linear_infinite]"></div>
+            <div className="absolute top-1/3 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-yellow-500/60 to-transparent animate-[scan_4s_linear_infinite]"></div>
+            <div className="absolute top-2/3 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-red-500/60 to-transparent animate-[scan_3.5s_linear_infinite]"></div>
           </div>
 
           {/* Floating Elements */}
           <div className="absolute inset-0">
-            <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-blue-500/20 rounded-full animate-[float_4s_ease-in-out_infinite]"></div>
-            <div className="absolute top-1/3 right-1/4 w-3 h-3 bg-green-500/20 rounded-full animate-[float_5s_ease-in-out_infinite]"></div>
-            <div className="absolute bottom-1/4 left-1/3 w-2 h-2 bg-purple-500/20 rounded-full animate-[float_3s_ease-in-out_infinite]"></div>
-            <div className="absolute top-2/3 right-1/3 w-3 h-3 bg-blue-500/20 rounded-full animate-[float_4.5s_ease-in-out_infinite]"></div>
-            <div className="absolute top-1/2 left-1/2 w-4 h-4 bg-yellow-500/20 rounded-full animate-[float_6s_ease-in-out_infinite]"></div>
-            <div className="absolute bottom-1/3 right-1/2 w-2 h-2 bg-red-500/20 rounded-full animate-[float_3.5s_ease-in-out_infinite]"></div>
+            <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-blue-500/40 rounded-full animate-[float_4s_ease-in-out_infinite]"></div>
+            <div className="absolute top-1/3 right-1/4 w-3 h-3 bg-green-500/40 rounded-full animate-[float_5s_ease-in-out_infinite]"></div>
+            <div className="absolute bottom-1/4 left-1/3 w-2 h-2 bg-purple-500/40 rounded-full animate-[float_3s_ease-in-out_infinite]"></div>
+            <div className="absolute top-2/3 right-1/3 w-3 h-3 bg-blue-500/40 rounded-full animate-[float_4.5s_ease-in-out_infinite]"></div>
+            <div className="absolute top-1/2 left-1/2 w-4 h-4 bg-yellow-500/40 rounded-full animate-[float_6s_ease-in-out_infinite]"></div>
+            <div className="absolute bottom-1/3 right-1/2 w-2 h-2 bg-red-500/40 rounded-full animate-[float_3.5s_ease-in-out_infinite]"></div>
           </div>
 
           {/* Matrix-like Code Rain */}
-          <div className="absolute inset-0 opacity-10">
-            <div className="absolute top-0 left-1/4 w-[1px] h-full bg-gradient-to-b from-transparent via-blue-500/20 to-transparent animate-[matrix_2s_linear_infinite]"></div>
-            <div className="absolute top-0 left-1/2 w-[1px] h-full bg-gradient-to-b from-transparent via-green-500/20 to-transparent animate-[matrix_2.5s_linear_infinite]"></div>
-            <div className="absolute top-0 right-1/4 w-[1px] h-full bg-gradient-to-b from-transparent via-purple-500/20 to-transparent animate-[matrix_3s_linear_infinite]"></div>
-            <div className="absolute top-0 left-1/6 w-[1px] h-full bg-gradient-to-b from-transparent via-yellow-500/20 to-transparent animate-[matrix_1.5s_linear_infinite]"></div>
-            <div className="absolute top-0 right-1/6 w-[1px] h-full bg-gradient-to-b from-transparent via-red-500/20 to-transparent animate-[matrix_2.2s_linear_infinite]"></div>
+          <div className="absolute inset-0 opacity-20">
+            <div className="absolute top-0 left-1/4 w-[1px] h-full bg-gradient-to-b from-transparent via-blue-500/40 to-transparent animate-[matrix_2s_linear_infinite]"></div>
+            <div className="absolute top-0 left-1/2 w-[1px] h-full bg-gradient-to-b from-transparent via-green-500/40 to-transparent animate-[matrix_2.5s_linear_infinite]"></div>
+            <div className="absolute top-0 right-1/4 w-[1px] h-full bg-gradient-to-b from-transparent via-purple-500/40 to-transparent animate-[matrix_3s_linear_infinite]"></div>
+            <div className="absolute top-0 left-1/6 w-[1px] h-full bg-gradient-to-b from-transparent via-yellow-500/40 to-transparent animate-[matrix_1.5s_linear_infinite]"></div>
+            <div className="absolute top-0 right-1/6 w-[1px] h-full bg-gradient-to-b from-transparent via-red-500/40 to-transparent animate-[matrix_2.2s_linear_infinite]"></div>
           </div>
 
           {/* Stock Symbols */}
-          <div className="absolute inset-0">
-            <div className="absolute top-[10%] left-[15%] text-[12px] font-mono text-blue-500/60 animate-[float_4s_ease-in-out_infinite]">AAPL</div>
-            <div className="absolute top-[20%] right-[20%] text-[12px] font-mono text-green-500/60 animate-[float_5s_ease-in-out_infinite]">MSFT</div>
-            <div className="absolute top-[40%] left-[25%] text-[12px] font-mono text-purple-500/60 animate-[float_3s_ease-in-out_infinite]">GOOGL</div>
-            <div className="absolute top-[60%] right-[15%] text-[12px] font-mono text-yellow-500/60 animate-[float_4.5s_ease-in-out_infinite]">AMZN</div>
-            <div className="absolute top-[80%] left-[30%] text-[12px] font-mono text-red-500/60 animate-[float_3.5s_ease-in-out_infinite]">TSLA</div>
-            <div className="absolute top-[30%] right-[30%] text-[12px] font-mono text-blue-500/60 animate-[float_6s_ease-in-out_infinite]">META</div>
-            <div className="absolute top-[15%] left-[40%] text-[12px] font-mono text-indigo-500/60 animate-[float_4.2s_ease-in-out_infinite]">NVDA</div>
-            <div className="absolute top-[45%] right-[35%] text-[12px] font-mono text-pink-500/60 animate-[float_5.2s_ease-in-out_infinite]">NFLX</div>
-            <div className="absolute top-[70%] left-[45%] text-[12px] font-mono text-cyan-500/60 animate-[float_3.8s_ease-in-out_infinite]">AMD</div>
-            <div className="absolute top-[25%] right-[45%] text-[12px] font-mono text-orange-500/60 animate-[float_4.8s_ease-in-out_infinite]">BTC</div>
-            <div className="absolute top-[55%] left-[35%] text-[12px] font-mono text-emerald-500/60 animate-[float_5.5s_ease-in-out_infinite]">ETH</div>
-            <div className="absolute top-[85%] right-[40%] text-[12px] font-mono text-violet-500/60 animate-[float_4.5s_ease-in-out_infinite]">SOL</div>
-            <div className="absolute top-[35%] left-[55%] text-[12px] font-mono text-rose-500/60 animate-[float_5.8s_ease-in-out_infinite]">DOGE</div>
-            <div className="absolute top-[65%] right-[55%] text-[12px] font-mono text-amber-500/60 animate-[float_4.2s_ease-in-out_infinite]">ADA</div>
-            <div className="absolute top-[90%] left-[60%] text-[12px] font-mono text-sky-500/60 animate-[float_3.9s_ease-in-out_infinite]">DOT</div>
+          <div className="absolute inset-0 opacity-15">
+            <div className="absolute top-[10%] left-[15%] text-[8px] text-blue-500/20 animate-[float_4s_ease-in-out_infinite]">AAPL</div>
+            <div className="absolute top-[20%] right-[20%] text-[8px] text-green-500/20 animate-[float_5s_ease-in-out_infinite]">MSFT</div>
+            <div className="absolute top-[40%] left-[25%] text-[8px] text-purple-500/20 animate-[float_3s_ease-in-out_infinite]">GOOGL</div>
+            <div className="absolute top-[60%] right-[15%] text-[8px] text-yellow-500/20 animate-[float_4.5s_ease-in-out_infinite]">AMZN</div>
+            <div className="absolute top-[80%] left-[30%] text-[8px] text-red-500/20 animate-[float_3.5s_ease-in-out_infinite]">TSLA</div>
+            <div className="absolute top-[30%] right-[30%] text-[8px] text-blue-500/20 animate-[float_6s_ease-in-out_infinite]">META</div>
           </div>
 
           {/* Digital Circuit Pattern */}
-          <div className="absolute inset-0 opacity-10">
-            <div className="absolute top-[20%] left-[10%] w-8 h-8 border border-blue-500/20 rounded-sm animate-[pulse_4s_ease-in-out_infinite]"></div>
-            <div className="absolute top-[40%] right-[15%] w-6 h-6 border border-green-500/20 rounded-sm animate-[pulse_5s_ease-in-out_infinite]"></div>
-            <div className="absolute top-[60%] left-[20%] w-10 h-10 border border-purple-500/20 rounded-sm animate-[pulse_3s_ease-in-out_infinite]"></div>
-            <div className="absolute top-[80%] right-[25%] w-8 h-8 border border-yellow-500/20 rounded-sm animate-[pulse_4.5s_ease-in-out_infinite]"></div>
+          <div className="absolute inset-0 opacity-20">
+            <div className="absolute top-[20%] left-[10%] w-8 h-8 border border-blue-500/40 rounded-sm animate-[pulse_4s_ease-in-out_infinite]"></div>
+            <div className="absolute top-[40%] right-[15%] w-6 h-6 border border-green-500/40 rounded-sm animate-[pulse_5s_ease-in-out_infinite]"></div>
+            <div className="absolute top-[60%] left-[20%] w-10 h-10 border border-purple-500/40 rounded-sm animate-[pulse_3s_ease-in-out_infinite]"></div>
+            <div className="absolute top-[80%] right-[25%] w-8 h-8 border border-yellow-500/40 rounded-sm animate-[pulse_4.5s_ease-in-out_infinite]"></div>
           </div>
 
           {/* Connection Lines */}
-          <div className="absolute inset-0 opacity-10">
-            <div className="absolute top-[20%] left-[10%] w-[100px] h-[1px] bg-gradient-to-r from-blue-500/20 to-transparent transform rotate-45"></div>
-            <div className="absolute top-[40%] right-[15%] w-[80px] h-[1px] bg-gradient-to-l from-green-500/20 to-transparent transform -rotate-45"></div>
-            <div className="absolute top-[60%] left-[20%] w-[120px] h-[1px] bg-gradient-to-r from-purple-500/20 to-transparent transform rotate-30"></div>
-            <div className="absolute top-[80%] right-[25%] w-[90px] h-[1px] bg-gradient-to-l from-yellow-500/20 to-transparent transform -rotate-30"></div>
+          <div className="absolute inset-0 opacity-20">
+            <div className="absolute top-[20%] left-[10%] w-[100px] h-[1px] bg-gradient-to-r from-blue-500/40 to-transparent transform rotate-45"></div>
+            <div className="absolute top-[40%] right-[15%] w-[80px] h-[1px] bg-gradient-to-l from-green-500/40 to-transparent transform -rotate-45"></div>
+            <div className="absolute top-[60%] left-[20%] w-[120px] h-[1px] bg-gradient-to-r from-purple-500/40 to-transparent transform rotate-30"></div>
+            <div className="absolute top-[80%] right-[25%] w-[90px] h-[1px] bg-gradient-to-l from-yellow-500/40 to-transparent transform -rotate-30"></div>
           </div>
         </div>
 
@@ -341,8 +332,8 @@ export default function LoginPage() {
           <div className="bg-gray-900/95 backdrop-blur-sm border border-gray-800/50 rounded-lg p-8 relative overflow-hidden">
             {/* Border Animation */}
             <div className="absolute inset-0 pointer-events-none">
-              <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-blue-500/40 to-transparent animate-[scan_2s_linear_infinite]"></div>
-              <div className="absolute bottom-0 right-0 w-full h-[1px] bg-gradient-to-r from-transparent via-purple-500/40 to-transparent animate-[scan_2.5s_linear_infinite]"></div>
+              <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-blue-500/60 to-transparent animate-[scan_2s_linear_infinite]"></div>
+              <div className="absolute bottom-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-purple-500/60 to-transparent animate-[scan_2.5s_linear_infinite]"></div>
             </div>
 
             {/* Logo and Title */}
@@ -511,18 +502,18 @@ export default function LoginPage() {
                   ? 'opacity-0 blur-sm transform translate-y-12' 
                   : 'opacity-100 blur-0 transform translate-y-0'
               }`}
-              style={{ transitionDelay: isAnimating ? '0ms' : '200ms' }}
+              style={{ transitionDelay: isAnimating ? '0ms' : '100ms' }}
             >
               {currentHero.features.map((feature, index) => (
                 <div 
                   key={`feature-${index}-${animationKey}`}
-                  className={`bg-gray-800/30 backdrop-blur-sm rounded-lg p-6 border border-gray-700/30 transition-all duration-500 ease-out ${
+                  className={`bg-gray-800/30 backdrop-blur-sm rounded-lg p-6 border border-gray-700/30 transition-all duration-700 ease-out ${
                     isAnimating 
                       ? 'opacity-0 blur-sm transform translate-y-8 scale-95' 
                       : 'opacity-100 blur-0 transform translate-y-0 scale-100'
                   }`}
                   style={{ 
-                    transitionDelay: isAnimating ? '0ms' : `${300 + (index * 100)}ms` 
+                    transitionDelay: isAnimating ? '0ms' : `${200 + (index * 150)}ms`
                   }}
                 >
                   <div className={`w-12 h-12 ${feature.bgColor} rounded-lg flex items-center justify-center mb-4`}>
@@ -542,7 +533,7 @@ export default function LoginPage() {
                   ? 'opacity-0 blur-sm transform translate-y-10' 
                   : 'opacity-100 blur-0 transform translate-y-0'
               }`}
-              style={{ transitionDelay: isAnimating ? '0ms' : '700ms' }}
+              style={{ transitionDelay: isAnimating ? '0ms' : '400ms' }}
             >
               <h3 className="text-2xl font-semibold text-white mb-6">Everything You Need to Succeed</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -577,7 +568,7 @@ export default function LoginPage() {
                   ? 'opacity-0 blur-sm transform translate-y-8' 
                   : 'opacity-100 blur-0 transform translate-y-0'
               }`}
-              style={{ transitionDelay: isAnimating ? '0ms' : '1200ms' }}
+              style={{ transitionDelay: isAnimating ? '0ms' : '600ms' }}
             >
               {currentHero.stats.map((stat, index) => (
                 <div 

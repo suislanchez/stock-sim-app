@@ -25,15 +25,36 @@ function parseBuyRequest(message: string) {
   return null;
 }
 
+// Add function to parse sell requests
+function parseSellRequest(message: string) {
+  const sellPatterns = [
+    /sell\s+(\d+)\s+(?:shares?\s+of\s+|stocks?\s+of\s+)?([a-zA-Z]+)/i,
+    /sell\s+([a-zA-Z]+)\s+(?:shares?\s+of\s+)?(\d+)/i
+  ];
+
+  for (const pattern of sellPatterns) {
+    const match = message.match(pattern);
+    if (match) {
+      // Handle both patterns: "sell 10 AAPL" and "sell AAPL 10"
+      const shares = parseInt(match[1]);
+      const symbol = match[2].toUpperCase();
+      if (!isNaN(shares)) {
+        return { shares, symbol };
+      } else {
+        return { shares: parseInt(match[2]), symbol: match[1].toUpperCase() };
+      }
+    }
+  }
+  return null;
+}
+
 export async function POST(req: Request) {
   try {
     const { message, context } = await req.json();
 
     // Check for buy requests
     const buyRequest = parseBuyRequest(message);
-    
     if (buyRequest) {
-      // Return confirmation prompt instead of executing
       return NextResponse.json({
         message: `You asked me to buy ${buyRequest.shares} shares of ${buyRequest.symbol}. Would you like to confirm this purchase?`,
         requiresConfirmation: true,
@@ -41,6 +62,34 @@ export async function POST(req: Request) {
           type: 'buy_stock',
           symbol: buyRequest.symbol,
           shares: buyRequest.shares
+        }
+      });
+    }
+
+    // Check for sell requests
+    const sellRequest = parseSellRequest(message);
+    if (sellRequest) {
+      // Check if user owns the stock
+      const portfolioItem = context.portfolio?.find((item: any) => item.symbol === sellRequest.symbol);
+      if (!portfolioItem) {
+        return NextResponse.json({
+          message: `You don't own any shares of ${sellRequest.symbol}.`,
+          requiresConfirmation: false
+        });
+      }
+      if (portfolioItem.shares < sellRequest.shares) {
+        return NextResponse.json({
+          message: `You only own ${portfolioItem.shares} shares of ${sellRequest.symbol}. You can't sell ${sellRequest.shares} shares.`,
+          requiresConfirmation: false
+        });
+      }
+      return NextResponse.json({
+        message: `You asked me to sell ${sellRequest.shares} shares of ${sellRequest.symbol}. Would you like to confirm this sale?`,
+        requiresConfirmation: true,
+        pendingAction: {
+          type: 'sell_stock',
+          symbol: sellRequest.symbol,
+          shares: sellRequest.shares
         }
       });
     }
