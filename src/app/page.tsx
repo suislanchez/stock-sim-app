@@ -10,6 +10,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [currentSection, setCurrentSection] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [animationKey, setAnimationKey] = useState(0);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,62 +49,586 @@ export default function LoginPage() {
     }
   };
 
-  return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-50">
-      <form
-        onSubmit={handleAuth}
-        className="flex flex-col p-8 bg-white rounded shadow-md w-full max-w-sm"
-      >
-        <h1 className="text-3xl font-bold mb-6 text-center text-black">Stock-Sim-Social</h1>
-        <h2 className="text-2xl font-bold mb-4 text-black">
-          {isSignUp ? "Sign Up" : "Log In"}
-        </h2>
-        {error && <p className="text-red-500 mb-4">{error}</p>}
+  const heroSections = [
+    {
+      title: "Master the Market",
+      subtitle: "Practice trading with virtual money. Learn strategies, analyze trends, and build confidence before investing real capital. Join thousands of traders who started their journey with SimuTrader.",
+      features: [
+        {
+          icon: (
+            <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+            </svg>
+          ),
+          title: "$10,000 Starting Balance",
+          description: "Begin with virtual funds to practice risk-free trading and portfolio management.",
+          bgColor: "bg-green-500/20"
+        },
+        {
+          icon: (
+            <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+            </svg>
+          ),
+          title: "Real Market Data",
+          description: "Access live prices, market news, and financial data from real stock exchanges.",
+          bgColor: "bg-blue-500/20"
+        },
+        {
+          icon: (
+            <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+            </svg>
+          ),
+          title: "Advanced Analytics",
+          description: "Track performance with detailed charts, profit/loss analysis, and portfolio metrics.",
+          bgColor: "bg-purple-500/20"
+        },
+        {
+          icon: (
+            <svg className="w-6 h-6 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+            </svg>
+          ),
+          title: "Social Trading",
+          description: "Connect with other traders, share strategies, and learn from the community.",
+          bgColor: "bg-orange-500/20"
+        }
+      ],
+      additionalFeatures: [
+        "Portfolio diversification tools",
+        "Risk management features",
+        "Market sentiment analysis",
+        "Cryptocurrency trading",
+        "Social trading community",
+        "Tax reporting assistance",
+        "Futures and options trading",
+        "AI-powered insights"
+      ],
+      stats: [
+        { value: "50K+", label: "Active Traders" },
+        { value: "$2B+", label: "Virtual Volume Traded" },
+        { value: "98%", label: "User Satisfaction" }
+      ]
+    },
+    {
+      title: "Professional Trading",
+      subtitle: "Access advanced trading features including futures contracts, automated risk management, and comprehensive tax reporting. Trade like a professional with institutional-grade tools.",
+      features: [
+        {
+          icon: (
+            <svg className="w-6 h-6 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+            </svg>
+          ),
+          title: "Futures Trading",
+          description: "Trade commodity, currency, and index futures with real-time margin calculations.",
+          bgColor: "bg-yellow-500/20"
+        },
+        {
+          icon: (
+            <svg className="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+            </svg>
+          ),
+          title: "Automated Stop Loss",
+          description: "Set intelligent stop-loss orders with trailing stops and risk percentage limits.",
+          bgColor: "bg-red-500/20"
+        },
+        {
+          icon: (
+            <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+            </svg>
+          ),
+          title: "Tax Optimization",
+          description: "Automatic tax-loss harvesting and comprehensive reporting for all trading activities.",
+          bgColor: "bg-green-500/20"
+        },
+        {
+          icon: (
+            <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+            </svg>
+          ),
+          title: "Smart Algorithms",
+          description: "AI-powered trading suggestions and automated portfolio rebalancing.",
+          bgColor: "bg-blue-500/20"
+        }
+      ],
+      additionalFeatures: [
+        "Margin trading simulation",
+        "Options strategies builder",
+        "Cryptocurrency futures",
+        "Risk assessment tools",
+        "Advanced order types",
+        "Portfolio optimization",
+        "Tax-loss harvesting",
+        "Regulatory compliance"
+      ],
+      stats: [
+        { value: "24/7", label: "Market Access" },
+        { value: "100ms", label: "Order Execution" },
+        { value: "99.9%", label: "System Uptime" }
+      ]
+    },
+    {
+      title: "Learn While Trading",
+      subtitle: "Comprehensive educational resources to transform you from beginner to expert trader. Interactive courses, market analysis, and real-world case studies from industry professionals.",
+      features: [
+        {
+          icon: (
+            <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+            </svg>
+          ),
+          title: "Interactive Courses",
+          description: "Step-by-step lessons covering everything from basics to advanced trading strategies.",
+          bgColor: "bg-purple-500/20"
+        },
+        {
+          icon: (
+            <svg className="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+            </svg>
+          ),
+          title: "Market Analysis",
+          description: "Learn technical and fundamental analysis with real-time market examples.",
+          bgColor: "bg-indigo-500/20"
+        },
+        {
+          icon: (
+            <svg className="w-6 h-6 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+            </svg>
+          ),
+          title: "Expert Mentorship",
+          description: "Connect with professional traders for personalized guidance and feedback.",
+          bgColor: "bg-pink-500/20"
+        },
+        {
+          icon: (
+            <svg className="w-6 h-6 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+            </svg>
+          ),
+          title: "Certification Program",
+          description: "Earn recognized trading certifications to validate your knowledge and skills.",
+          bgColor: "bg-teal-500/20"
+        }
+      ],
+      additionalFeatures: [
+        "Video tutorials library",
+        "Trading psychology courses",
+        "Risk management training",
+        "Market simulation exercises",
+        "Weekly live webinars",
+        "Community study groups",
+        "Progress tracking system",
+        "Mobile learning app"
+      ],
+      stats: [
+        { value: "200+", label: "Course Modules" },
+        { value: "15K+", label: "Students Graduated" },
+        { value: "4.9★", label: "Average Rating" }
+      ]
+    }
+  ];
 
-        <div className="mb-4">
-          <label className="block text-black font-medium mb-2">Email</label>
+  const nextSection = () => {
+    if (isAnimating) return;
+    setIsAnimating(true);
+    setAnimationKey(prev => prev + 1);
+    setCurrentSection((prev) => (prev + 1) % heroSections.length);
+    setTimeout(() => setIsAnimating(false), 100);
+  };
+
+  const prevSection = () => {
+    if (isAnimating) return;
+    setIsAnimating(true);
+    setAnimationKey(prev => prev + 1);
+    setCurrentSection((prev) => (prev - 1 + heroSections.length) % heroSections.length);
+    setTimeout(() => setIsAnimating(false), 100);
+  };
+
+  const goToSection = (index: number) => {
+    if (isAnimating || index === currentSection) return;
+    setIsAnimating(true);
+    setAnimationKey(prev => prev + 1);
+    setCurrentSection(index);
+    setTimeout(() => setIsAnimating(false), 100);
+  };
+
+  const currentHero = heroSections[currentSection];
+
+  return (
+    <div className="flex min-h-screen bg-black font-sans">
+      {/* Left side - Login Form */}
+      <div className="w-[35%] flex items-center justify-center p-8 relative overflow-hidden">
+        {/* Animated Background */}
+        <div className="absolute inset-0 bg-black">
+          {/* Grid Pattern */}
+          <div className="absolute inset-0 opacity-20">
+            <div className="absolute inset-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:14px_24px]"></div>
+          </div>
+          
+          {/* Animated Lines */}
+          <div className="absolute inset-0">
+            <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-blue-500/40 to-transparent animate-[scan_2s_linear_infinite]"></div>
+            <div className="absolute top-1/4 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-green-500/40 to-transparent animate-[scan_3s_linear_infinite]"></div>
+            <div className="absolute top-2/4 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-purple-500/40 to-transparent animate-[scan_2.5s_linear_infinite]"></div>
+            <div className="absolute top-3/4 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-blue-500/40 to-transparent animate-[scan_1.5s_linear_infinite]"></div>
+            <div className="absolute top-1/3 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-yellow-500/40 to-transparent animate-[scan_4s_linear_infinite]"></div>
+            <div className="absolute top-2/3 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-red-500/40 to-transparent animate-[scan_3.5s_linear_infinite]"></div>
+          </div>
+
+          {/* Floating Elements */}
+          <div className="absolute inset-0">
+            <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-blue-500/20 rounded-full animate-[float_4s_ease-in-out_infinite]"></div>
+            <div className="absolute top-1/3 right-1/4 w-3 h-3 bg-green-500/20 rounded-full animate-[float_5s_ease-in-out_infinite]"></div>
+            <div className="absolute bottom-1/4 left-1/3 w-2 h-2 bg-purple-500/20 rounded-full animate-[float_3s_ease-in-out_infinite]"></div>
+            <div className="absolute top-2/3 right-1/3 w-3 h-3 bg-blue-500/20 rounded-full animate-[float_4.5s_ease-in-out_infinite]"></div>
+            <div className="absolute top-1/2 left-1/2 w-4 h-4 bg-yellow-500/20 rounded-full animate-[float_6s_ease-in-out_infinite]"></div>
+            <div className="absolute bottom-1/3 right-1/2 w-2 h-2 bg-red-500/20 rounded-full animate-[float_3.5s_ease-in-out_infinite]"></div>
+          </div>
+
+          {/* Matrix-like Code Rain */}
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute top-0 left-1/4 w-[1px] h-full bg-gradient-to-b from-transparent via-blue-500/20 to-transparent animate-[matrix_2s_linear_infinite]"></div>
+            <div className="absolute top-0 left-1/2 w-[1px] h-full bg-gradient-to-b from-transparent via-green-500/20 to-transparent animate-[matrix_2.5s_linear_infinite]"></div>
+            <div className="absolute top-0 right-1/4 w-[1px] h-full bg-gradient-to-b from-transparent via-purple-500/20 to-transparent animate-[matrix_3s_linear_infinite]"></div>
+            <div className="absolute top-0 left-1/6 w-[1px] h-full bg-gradient-to-b from-transparent via-yellow-500/20 to-transparent animate-[matrix_1.5s_linear_infinite]"></div>
+            <div className="absolute top-0 right-1/6 w-[1px] h-full bg-gradient-to-b from-transparent via-red-500/20 to-transparent animate-[matrix_2.2s_linear_infinite]"></div>
+          </div>
+
+          {/* Stock Symbols */}
+          <div className="absolute inset-0">
+            <div className="absolute top-[10%] left-[15%] text-[12px] font-mono text-blue-500/60 animate-[float_4s_ease-in-out_infinite]">AAPL</div>
+            <div className="absolute top-[20%] right-[20%] text-[12px] font-mono text-green-500/60 animate-[float_5s_ease-in-out_infinite]">MSFT</div>
+            <div className="absolute top-[40%] left-[25%] text-[12px] font-mono text-purple-500/60 animate-[float_3s_ease-in-out_infinite]">GOOGL</div>
+            <div className="absolute top-[60%] right-[15%] text-[12px] font-mono text-yellow-500/60 animate-[float_4.5s_ease-in-out_infinite]">AMZN</div>
+            <div className="absolute top-[80%] left-[30%] text-[12px] font-mono text-red-500/60 animate-[float_3.5s_ease-in-out_infinite]">TSLA</div>
+            <div className="absolute top-[30%] right-[30%] text-[12px] font-mono text-blue-500/60 animate-[float_6s_ease-in-out_infinite]">META</div>
+            <div className="absolute top-[15%] left-[40%] text-[12px] font-mono text-indigo-500/60 animate-[float_4.2s_ease-in-out_infinite]">NVDA</div>
+            <div className="absolute top-[45%] right-[35%] text-[12px] font-mono text-pink-500/60 animate-[float_5.2s_ease-in-out_infinite]">NFLX</div>
+            <div className="absolute top-[70%] left-[45%] text-[12px] font-mono text-cyan-500/60 animate-[float_3.8s_ease-in-out_infinite]">AMD</div>
+            <div className="absolute top-[25%] right-[45%] text-[12px] font-mono text-orange-500/60 animate-[float_4.8s_ease-in-out_infinite]">BTC</div>
+            <div className="absolute top-[55%] left-[35%] text-[12px] font-mono text-emerald-500/60 animate-[float_5.5s_ease-in-out_infinite]">ETH</div>
+            <div className="absolute top-[85%] right-[40%] text-[12px] font-mono text-violet-500/60 animate-[float_4.5s_ease-in-out_infinite]">SOL</div>
+            <div className="absolute top-[35%] left-[55%] text-[12px] font-mono text-rose-500/60 animate-[float_5.8s_ease-in-out_infinite]">DOGE</div>
+            <div className="absolute top-[65%] right-[55%] text-[12px] font-mono text-amber-500/60 animate-[float_4.2s_ease-in-out_infinite]">ADA</div>
+            <div className="absolute top-[90%] left-[60%] text-[12px] font-mono text-sky-500/60 animate-[float_3.9s_ease-in-out_infinite]">DOT</div>
+          </div>
+
+          {/* Digital Circuit Pattern */}
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute top-[20%] left-[10%] w-8 h-8 border border-blue-500/20 rounded-sm animate-[pulse_4s_ease-in-out_infinite]"></div>
+            <div className="absolute top-[40%] right-[15%] w-6 h-6 border border-green-500/20 rounded-sm animate-[pulse_5s_ease-in-out_infinite]"></div>
+            <div className="absolute top-[60%] left-[20%] w-10 h-10 border border-purple-500/20 rounded-sm animate-[pulse_3s_ease-in-out_infinite]"></div>
+            <div className="absolute top-[80%] right-[25%] w-8 h-8 border border-yellow-500/20 rounded-sm animate-[pulse_4.5s_ease-in-out_infinite]"></div>
+          </div>
+
+          {/* Connection Lines */}
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute top-[20%] left-[10%] w-[100px] h-[1px] bg-gradient-to-r from-blue-500/20 to-transparent transform rotate-45"></div>
+            <div className="absolute top-[40%] right-[15%] w-[80px] h-[1px] bg-gradient-to-l from-green-500/20 to-transparent transform -rotate-45"></div>
+            <div className="absolute top-[60%] left-[20%] w-[120px] h-[1px] bg-gradient-to-r from-purple-500/20 to-transparent transform rotate-30"></div>
+            <div className="absolute top-[80%] right-[25%] w-[90px] h-[1px] bg-gradient-to-l from-yellow-500/20 to-transparent transform -rotate-30"></div>
+          </div>
+        </div>
+
+        <div className="w-full max-w-sm relative z-10">
+          <div className="bg-gray-900/95 backdrop-blur-sm border border-gray-800/50 rounded-lg p-8 relative overflow-hidden">
+            {/* Border Animation */}
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-blue-500/40 to-transparent animate-[scan_2s_linear_infinite]"></div>
+              <div className="absolute bottom-0 right-0 w-full h-[1px] bg-gradient-to-r from-transparent via-purple-500/40 to-transparent animate-[scan_2.5s_linear_infinite]"></div>
+            </div>
+
+            {/* Logo and Title */}
+            <div className="text-center mb-8">
+              <div className="flex items-center justify-center mb-4">
+                <img src="/logo.png" alt="SimuTrader Logo" className="w-16 h-16 rounded-full" />
+              </div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-white via-gray-200 to-gray-300 bg-clip-text text-transparent mb-2">
+                SimuTrader
+              </h1>
+              <p className="text-gray-400 text-sm">Welcome to the future of stock trading simulation</p>
+            </div>
+
+            <form onSubmit={handleAuth} className="space-y-6">
+              <div className="text-center mb-6">
+                <h2 className="text-2xl font-semibold text-white">
+                  {isSignUp ? "Create Account" : "Welcome Back"}
+                </h2>
+                <p className="text-gray-400 mt-2">
+                  {isSignUp ? "Start your trading journey today" : "Sign in to your account"}
+                </p>
+              </div>
+
+              {error && (
+                <div className="bg-red-900/50 border border-red-700/50 rounded-lg p-3">
+                  <p className="text-red-400 text-sm">{error}</p>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-gray-300 font-medium mb-2 text-sm">
+                    Email Address
+                  </label>
           <input
             type="email"
-            className="border p-2 w-full rounded text-black"
+                    className="w-full bg-gray-800/80 border border-gray-700/50 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gray-600/50 focus:ring-1 focus:ring-gray-600/50 transition-all"
+                    placeholder="Enter your email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
           />
         </div>
 
-        <div className="mb-6">
-          <label className="block text-black font-medium mb-2">Password</label>
+                <div>
+                  <label className="block text-gray-300 font-medium mb-2 text-sm">
+                    Password
+                  </label>
           <input
             type="password"
-            className="border p-2 w-full rounded text-black"
+                    className="w-full bg-gray-800/80 border border-gray-700/50 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gray-600/50 focus:ring-1 focus:ring-gray-600/50 transition-all"
+                    placeholder="Enter your password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
           />
+                </div>
         </div>
 
         <button
           type="submit"
-          className="bg-blue-500 text-white py-2 rounded mb-4 hover:bg-blue-600 transition-colors"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           disabled={loading}
+              >
+                {loading ? (
+                  <div className="flex items-center justify-center">
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    {isSignUp ? "Creating Account..." : "Signing In..."}
+                  </div>
+                ) : (
+                  isSignUp ? "Create Account" : "Sign In"
+                )}
+              </button>
+
+              <div className="text-center">
+                <button
+                  type="button"
+                  className="text-gray-400 hover:text-white text-sm transition-colors duration-200"
+                  onClick={() => setIsSignUp(!isSignUp)}
+                >
+                  {isSignUp
+                    ? "Already have an account? Sign in"
+                    : "Don't have an account? Sign up"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      {/* Right side - Hero Section */}
+      <div className="w-[65%] relative overflow-hidden">
+        {/* Navigation Arrows */}
+        <button
+          onClick={prevSection}
+          className="absolute left-4 top-1/2 transform -translate-y-1/2  z-30 bg-gray-800/80 hover:bg-gray-700/80 backdrop-blur-sm border border-gray-600/50 rounded-full p-3 transition-all duration-200 group"
         >
-          {loading
-            ? "Loading..."
-            : isSignUp
-            ? "Sign Up"
-            : "Log In"}
+          <svg className="w-6 h-6 text-gray-300 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path>
+          </svg>
         </button>
 
         <button
-          type="button"
-          className="text-sm text-black hover:text-gray-600 transition-colors"
-          onClick={() => setIsSignUp(!isSignUp)}
+          onClick={nextSection}
+          className="absolute right-4 top-1/2 transform -translate-y-1/2 z-30 bg-gray-800/80 hover:bg-gray-700/80 backdrop-blur-sm border border-gray-600/50 rounded-full p-3 transition-all duration-200 group"
         >
-          {isSignUp
-            ? "Already have an account? Log In"
-            : "Don't have an account? Sign Up"}
+          <svg className="w-6 h-6 text-gray-300 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
+          </svg>
         </button>
-      </form>
+
+        {/* Section Indicators */}
+        <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-30 flex space-x-2">
+          {heroSections.map((_, index) => (
+            <button
+              key={index}
+              onClick={() => goToSection(index)}
+              className={`w-3 h-3 rounded-full transition-all duration-200 ${
+                index === currentSection ? 'bg-white' : 'bg-gray-500 hover:bg-gray-400'
+              }`}
+            />
+          ))}
+        </div>
+
+        {/* Progressive blur overlay */}
+        <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/20 to-transparent z-10"></div>
+        
+        {/* Background gradient */}
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-900/20 via-purple-900/20 to-gray-900/40"></div>
+        
+        {/* Animated background elements */}
+        <div className="absolute inset-0">
+          <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-green-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '4s' }}></div>
+        </div>
+
+        {/* Main Content */}
+        <div className="relative z-20 h-full flex flex-col justify-center items-center p-12">
+          <div className="max-w-2xl w-full">
+            <div 
+              key={`header-${animationKey}`}
+              className={`mb-12 transition-all duration-500 ease-out text-center ${
+                isAnimating 
+                  ? 'opacity-0 blur-sm transform translate-y-8' 
+                  : 'opacity-100 blur-0 transform translate-y-0'
+              }`}
+              style={{ transitionDelay: isAnimating ? '0ms' : '100ms' }}
+            >
+              <h2 className="text-6xl font-bold text-white mb-6 leading-tight">
+                {currentHero.title}
+              </h2>
+              <p className="text-xl text-gray-300 mb-8 leading-relaxed">
+                {currentHero.subtitle}
+              </p>
+            </div>
+
+            {/* Feature Grid */}
+            <div 
+              key={`features-${animationKey}`}
+              className={`grid grid-cols-1 lg:grid-cols-2 gap-6 mb-12 transition-all duration-700 ease-out ${
+                isAnimating 
+                  ? 'opacity-0 blur-sm transform translate-y-12' 
+                  : 'opacity-100 blur-0 transform translate-y-0'
+              }`}
+              style={{ transitionDelay: isAnimating ? '0ms' : '200ms' }}
+            >
+              {currentHero.features.map((feature, index) => (
+                <div 
+                  key={`feature-${index}-${animationKey}`}
+                  className={`bg-gray-800/30 backdrop-blur-sm rounded-lg p-6 border border-gray-700/30 transition-all duration-500 ease-out ${
+                    isAnimating 
+                      ? 'opacity-0 blur-sm transform translate-y-8 scale-95' 
+                      : 'opacity-100 blur-0 transform translate-y-0 scale-100'
+                  }`}
+                  style={{ 
+                    transitionDelay: isAnimating ? '0ms' : `${300 + (index * 100)}ms` 
+                  }}
+                >
+                  <div className={`w-12 h-12 ${feature.bgColor} rounded-lg flex items-center justify-center mb-4`}>
+                    {feature.icon}
+                  </div>
+                  <h3 className="text-white font-semibold text-lg mb-2">{feature.title}</h3>
+                  <p className="text-gray-400 text-sm">{feature.description}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Additional Features List */}
+            <div 
+              key={`additional-${animationKey}`}
+              className={`space-y-4 transition-all duration-600 ease-out ${
+                isAnimating 
+                  ? 'opacity-0 blur-sm transform translate-y-10' 
+                  : 'opacity-100 blur-0 transform translate-y-0'
+              }`}
+              style={{ transitionDelay: isAnimating ? '0ms' : '700ms' }}
+            >
+              <h3 className="text-2xl font-semibold text-white mb-6">Everything You Need to Succeed</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {currentHero.additionalFeatures.map((feature, index) => {
+                  const colors = ['green', 'blue', 'purple', 'orange', 'pink', 'yellow', 'red', 'indigo'];
+                  const color = colors[index % colors.length];
+                  return (
+                    <div 
+                      key={`additional-feature-${index}-${animationKey}`}
+                      className={`flex items-center space-x-3 transition-all duration-400 ease-out ${
+                        isAnimating 
+                          ? 'opacity-0 blur-sm transform translate-x-4' 
+                          : 'opacity-100 blur-0 transform translate-x-0'
+                      }`}
+                      style={{ 
+                        transitionDelay: isAnimating ? '0ms' : `${800 + (index * 50)}ms` 
+                      }}
+                    >
+                      <div className={`w-2 h-2 bg-${color}-400 rounded-full`}></div>
+                      <span className="text-gray-300">{feature}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Stats Section */}
+            <div 
+              key={`stats-${animationKey}`}
+              className={`mt-12 grid grid-cols-3 gap-8 transition-all duration-600 ease-out ${
+                isAnimating 
+                  ? 'opacity-0 blur-sm transform translate-y-8' 
+                  : 'opacity-100 blur-0 transform translate-y-0'
+              }`}
+              style={{ transitionDelay: isAnimating ? '0ms' : '1200ms' }}
+            >
+              {currentHero.stats.map((stat, index) => (
+                <div 
+                  key={`stat-${index}-${animationKey}`}
+                  className={`text-center transition-all duration-500 ease-out ${
+                    isAnimating 
+                      ? 'opacity-0 blur-sm transform translate-y-6 scale-90' 
+                      : 'opacity-100 blur-0 transform translate-y-0 scale-100'
+                  }`}
+                  style={{ 
+                    transitionDelay: isAnimating ? '0ms' : `${1300 + (index * 100)}ms` 
+                  }}
+                >
+                  <div className="text-3xl font-bold text-white mb-2">{stat.value}</div>
+                  <div className="text-gray-400 text-sm">{stat.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
+}
+
+// Add these keyframes at the end of the file, before the last closing brace
+const keyframes = `
+@keyframes scan {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) translateX(0); }
+  50% { transform: translateY(-20px) translateX(10px); }
+}
+
+@keyframes matrix {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.2; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(1.1); }
+}
+`;
+
+// Add the style tag to the head
+if (typeof document !== 'undefined') {
+  const style = document.createElement('style');
+  style.textContent = keyframes;
+  document.head.appendChild(style);
 }
