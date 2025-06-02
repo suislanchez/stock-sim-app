@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { supabase } from "../../lib/supabaseClient";
+import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 import { fetchStock } from "../../lib/fetchStock";
 import {
@@ -408,6 +408,125 @@ const COLORS = [
   '#94A3B8'  // pastel gray
 ];
 
+// Add colors for market movers
+const MOVER_COLORS = {
+  gainers: ['#10B981', '#22C55E', '#16A34A', '#15803D', '#059669'], // Distinct green shades
+  losers: ['#EF4444', '#F97316', '#DC2626', '#EA580C', '#B91C1C'], // Distinct red/orange shades  
+  active: ['#8B5CF6', '#A855F7', '#9333EA', '#7C3AED', '#6D28D9'], // Distinct purple shades
+  default: COLORS
+};
+
+// Add this function to get color for a stock symbol
+const getStockColor = (symbol: string, portfolio: PortfolioItem[], moverType: 'gainers' | 'losers' | 'active' | null = null, marketMovers: MarketMovers | null = null) => {
+  // If we have a mover type context, use mover-specific colors
+  if (moverType && marketMovers) {
+    let movers: MarketMoverItem[] = [];
+    switch (moverType) {
+      case 'gainers':
+        movers = marketMovers.top_gainers;
+        break;
+      case 'losers':
+        movers = marketMovers.top_losers;
+        break;
+      case 'active':
+        movers = marketMovers.most_actively_traded;
+        break;
+    }
+    
+    const moverIndex = movers.findIndex(mover => mover.ticker === symbol);
+    if (moverIndex >= 0) {
+      return MOVER_COLORS[moverType][moverIndex % MOVER_COLORS[moverType].length];
+    }
+  }
+  
+  // Default to portfolio-based coloring
+  const index = portfolio.findIndex(item => item.symbol === symbol);
+  return index >= 0 ? COLORS[index % COLORS.length] : COLORS[0];
+};
+
+// Add this function to format message content with colored tickers
+const formatMessageContent = (content: string, portfolio: PortfolioItem[], onSelectStock: (symbol: string) => void, moverType: 'gainers' | 'losers' | 'active' | null = null, marketMovers: MarketMovers | null = null) => {
+  // Match stock symbols (uppercase letters) but exclude common words
+  const commonWords = [
+    // Common words
+    'I', 'A', 'THE', 'IN', 'ON', 'AT', 'TO', 'AND', 'OR', 'BUT', 'FOR', 'WITH', 'BY', 'FROM', 'AS', 'IS', 'ARE', 'WAS', 'WERE', 'BE', 'BEEN', 'BEING', 'HAVE', 'HAS', 'HAD', 'DO', 'DOES', 'DID', 'WILL', 'WOULD', 'SHALL', 'SHOULD', 'MAY', 'MIGHT', 'MUST', 'CAN', 'COULD',
+    // Government agencies
+    'FBI', 'CIA', 'NSA', 'IRS', 'DOD', 'DOJ', 'TSA', 'DHS', 'ICE', 'HUD', 'UN', 'WHO', 'CDC', 'NATO', 'ATF', 'FAA', 'GAO', 'DOE', 'FEC',
+    // Universities
+    'MIT', 'UCLA', 'UCB', 'USC', 'NYU', 'PSU', 'UIUC', 'ASU', 'RPI', 'BU', 'LSU', 'UF', 'UCF', 'UCI', 'UCSB', 'UCR', 'UCSF', 'UCS',
+    // Tech terms
+    'API', 'CPU', 'GPU', 'RAM', 'HTML', 'CSS', 'HTTP', 'HTTPS', 'SQL', 'USB', 'JSON', 'XML', 'PDF', 'DNS', 'LAN', 'WAN', 'IP', 'AI', 'IDE', 'CLI',
+    'FTP', 'SSH', 'VPN', 'IRC', 'NTP', 'MQTT', 'SSL', 'TLS', 'CDN', 'SaaS', 'PaaS', 'IaaS',
+    // Financial terms
+    'ROI', 'IPO', 'P&L', 'APR', 'ATM', 'GDP', 'CPI', 'EOY', 'DRIP', 'FIFO', 'LIFO', 'WACC', 'YTD', 'TTM', 'EPS', 'BPS', 'EV', 'EBIT', 'EBITDA',
+    // Media
+    'BBC', 'CNN', 'ABC', 'NBC', 'MTV', 'ESPN', 'HBO', 'TMZ', 'NPR', 'FOX', 'CNBC', 'BLOOM', 'WSJ', 'FT', 'NYT',
+    // Internet slang
+    'ASAP', 'LOL', 'BRB', 'IMO', 'FYI', 'TBD', 'ETA', 'FAQ', 'TLDR', 'DIY', 'OMG', 'NGL', 'WTF', 'FOMO', 'YOLO',
+    // Business terms
+    'NGO', 'LLC', 'LP', 'INC', 'LTD', 'S-CORP', 'DWI', 'DOA', 'CPA', 'JFK',
+    // Trading indicators
+    'MACD', 'RSI', 'ADX', 'BOLL', 'EMA', 'SMA', 'ROC', 'OBV', 'DCF', 'FED', 'FOMC',
+    // Financial instruments
+    'CDS', 'MBS', 'TIPS', 'REPO', 'LIBOR', 'SOFR', 'BID', 'ASK', 'NAV', 'AUM', 'FSA', 'FINRA',
+    // Financial institutions
+    'FDIC', 'CFPB', 'OCC', 'CFTC', 'BIS', 'IBRD', 'IFC', 'WTO'
+  ];
+  
+  const commonWordsPattern = commonWords.join('|');
+  const stockRegex = new RegExp(`(?<!${commonWordsPattern})(?<=\\b)([A-Z]{2,5}(?:\\.[A-Z])?)(?=\\b)`, 'g');
+  
+  return content.split('\n').map((line, i) => {
+    // Find all unique matches first
+    const matches = Array.from(new Set(line.match(stockRegex) || []));
+    
+    // Create a map of matches to their positions
+    const matchPositions = new Map();
+    let match;
+    while ((match = stockRegex.exec(line)) !== null) {
+      if (!matchPositions.has(match[0])) {
+        matchPositions.set(match[0], match.index);
+      }
+    }
+    
+    // Sort matches by their position in the text
+    matches.sort((a, b) => (matchPositions.get(a) || 0) - (matchPositions.get(b) || 0));
+    
+    // Split the line by the matches
+    let parts = [line];
+    matches.forEach(match => {
+      parts = parts.flatMap(part => {
+        const split = part.split(match);
+        return split.flatMap((p, i) => i === 0 ? [p] : [match, p]);
+      });
+    });
+    
+    return (
+      <p key={i} className="mb-2 last:mb-0">
+        {parts.map((part, j) => (
+          <span key={j}>
+            {matches.includes(part) ? (
+              <button
+                onClick={() => onSelectStock(part)}
+                className="px-1.5 py-0.5 rounded-md font-medium hover:opacity-80 transition-opacity"
+                style={{ 
+                  backgroundColor: `${getStockColor(part, portfolio, moverType, marketMovers)}20`,
+                  color: getStockColor(part, portfolio, moverType, marketMovers),
+                  border: `1px solid ${getStockColor(part, portfolio, moverType, marketMovers)}40`
+                }}
+              >
+                {part}
+              </button>
+            ) : (
+              part
+            )}
+          </span>
+        ))}
+      </p>
+    );
+  });
+};
+
 const sentimentColors = {
   bullish: 'bg-green-900/50 text-green-400 border-green-500',
   somewhat_bullish: 'bg-green-800/50 text-green-300 border-green-400',
@@ -753,8 +872,254 @@ const NewsSlider = ({ items, isCryptoMode }: { items: (NewsItem | TickerNews)[],
   );
 };
 
+// Add this function before parseIntent
+const getTopPerformingStocks = (portfolio: PortfolioItem[], count: number = 3) => {
+  return [...portfolio]
+    .sort((a, b) => (b.gain_loss_percentage || 0) - (a.gain_loss_percentage || 0))
+    .slice(0, count);
+};
+
+// Add these types for intent parsing
+interface Intent {
+  type: 'news' | 'performance' | 'comparison' | 'analysis' | 'prediction' | 'technical';
+  stocks: string[];
+  timeframe?: string;
+  metric?: string;
+  comparison?: 'top' | 'bottom' | 'all';
+  count?: number;
+  indicators?: ('RSI' | 'MACD')[];
+}
+
+interface APICall {
+  endpoint: string;
+  status: 'pending' | 'success' | 'error';
+  timestamp: number;
+}
+
+// Global state for API calls
+let apiCalls: APICall[] = [];
+const addApiCall = (endpoint: string) => {
+  const call: APICall = {
+    endpoint,
+    status: 'pending',
+    timestamp: Date.now()
+  };
+  apiCalls = [...apiCalls, call];
+  return call;
+};
+
+const updateApiCall = (endpoint: string, status: 'success' | 'error') => {
+  apiCalls = apiCalls.map(call => 
+    call.endpoint === endpoint 
+      ? { ...call, status } 
+      : call
+  );
+};
+
+// Add this function to parse intent using OpenAI
+const parseIntent = async (message: string, portfolio: PortfolioItem[]): Promise<Intent> => {
+  try {
+    const call = addApiCall('/api/parse-intent');
+    const response = await fetch('/api/parse-intent', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message,
+        portfolio: portfolio.map(item => ({
+          symbol: item.symbol,
+          performance: item.gain_loss_percentage,
+          currentPrice: item.current_price
+        }))
+      }),
+    });
+
+    if (!response.ok) {
+      updateApiCall(call.endpoint, 'error');
+      console.warn('Failed to parse intent, falling back to default technical intent');
+      return {
+        type: 'technical',
+        stocks: getTopPerformingStocks(portfolio, 3).map((s: PortfolioItem) => s.symbol),
+        indicators: ['RSI', 'MACD']
+      };
+    }
+
+    const data = await response.json();
+    if (!data || !data.intent) {
+      updateApiCall(call.endpoint, 'error');
+      console.warn('Invalid response format, falling back to default technical intent');
+      return {
+        type: 'technical',
+        stocks: getTopPerformingStocks(portfolio, 3).map((s: PortfolioItem) => s.symbol),
+        indicators: ['RSI', 'MACD']
+      };
+    }
+
+    updateApiCall(call.endpoint, 'success');
+    return data.intent;
+  } catch (error) {
+    console.error('Error parsing intent:', error);
+    return {
+      type: 'technical',
+      stocks: getTopPerformingStocks(portfolio, 3).map((s: PortfolioItem) => s.symbol),
+      indicators: ['RSI', 'MACD']
+    };
+  }
+};
+
+// Add this function to map intent to Alpha Vantage API calls
+const mapIntentToAPI = async (intent: Intent) => {
+  const results = {
+    news: [] as any[],
+    performance: [] as any[],
+    technical: [] as any[],
+    rsi: [] as any[],
+    macd: [] as any[]
+  };
+
+  try {
+    // Fetch news if needed
+    if (intent.type === 'news' || intent.type === 'analysis') {
+      const newsPromises = intent.stocks.map(async symbol => {
+        const endpoint = `https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers=${symbol}`;
+        const call = addApiCall(endpoint);
+        try {
+          const res = await fetch(`${endpoint}&apikey=${process.env.NEXT_PUBLIC_ALPHA_VANTAGE_KEY}`);
+          const data = await res.json();
+          updateApiCall(call.endpoint, 'success');
+          return {
+            symbol,
+            news: data.feed || []
+          };
+        } catch (error) {
+          updateApiCall(call.endpoint, 'error');
+          throw error;
+        }
+      });
+      results.news = await Promise.all(newsPromises);
+    }
+
+    // Fetch performance data if needed
+    if (intent.type === 'performance' || intent.type === 'comparison' || intent.type === 'analysis') {
+      const performancePromises = intent.stocks.map(async symbol => {
+        const endpoint = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}`;
+        const call = addApiCall(endpoint);
+        try {
+          const res = await fetch(`${endpoint}&apikey=${process.env.NEXT_PUBLIC_ALPHA_VANTAGE_KEY}`);
+          const data = await res.json();
+          updateApiCall(call.endpoint, 'success');
+          return {
+            symbol,
+            data: data['Time Series (Daily)'] || {}
+          };
+        } catch (error) {
+          updateApiCall(call.endpoint, 'error');
+          throw error;
+        }
+      });
+      results.performance = await Promise.all(performancePromises);
+    }
+
+    // Fetch technical indicators if needed
+    if (intent.type === 'technical' || intent.type === 'analysis' || intent.type === 'prediction' || intent.type === 'comparison') {
+      const technicalPromises = intent.stocks.map(async (symbol: string) => {
+        const promises = [];
+        
+        // Add RSI if requested or if no specific indicators are specified
+        if (!intent.indicators || intent.indicators.includes('RSI')) {
+          const endpoint = `https://www.alphavantage.co/query?function=RSI&symbol=${symbol}&interval=daily&time_period=14&series_type=close`;
+          const call = addApiCall(endpoint);
+          promises.push(
+            fetch(`${endpoint}&apikey=${process.env.NEXT_PUBLIC_ALPHA_VANTAGE_KEY}`)
+              .then(res => res.json())
+              .then(data => {
+                updateApiCall(call.endpoint, 'success');
+                return {
+                  type: 'rsi',
+                  data: data['Technical Analysis: RSI'] || {}
+                };
+              })
+              .catch(error => {
+                updateApiCall(call.endpoint, 'error');
+                throw error;
+              })
+          );
+        }
+
+        // Add MACD if requested or if no specific indicators are specified
+        if (!intent.indicators || intent.indicators.includes('MACD')) {
+          const endpoint = `https://www.alphavantage.co/query?function=MACD&symbol=${symbol}&interval=daily&series_type=close`;
+          const call = addApiCall(endpoint);
+          promises.push(
+            fetch(`${endpoint}&apikey=${process.env.NEXT_PUBLIC_ALPHA_VANTAGE_KEY}`)
+              .then(res => res.json())
+              .then(data => {
+                updateApiCall(call.endpoint, 'success');
+                return {
+                  type: 'macd',
+                  data: data['Technical Analysis: MACD'] || {}
+                };
+              })
+              .catch(error => {
+                updateApiCall(call.endpoint, 'error');
+                throw error;
+              })
+          );
+        }
+
+        const indicatorResults = await Promise.all(promises);
+        return {
+          symbol,
+          indicators: indicatorResults.reduce((acc, result) => ({
+            ...acc,
+            [result.type]: result.data
+          }), {})
+        };
+      });
+
+      results.technical = await Promise.all(technicalPromises);
+    }
+
+    return results;
+  } catch (error) {
+    console.error('Error fetching API data:', error);
+    return results;
+  }
+};
+
+// Add these interfaces after the existing interfaces
+interface MarketMovers {
+  top_gainers: MarketMoverItem[];
+  top_losers: MarketMoverItem[];
+  most_actively_traded: MarketMoverItem[];
+}
+
+interface MarketMoverItem {
+  ticker: string;
+  price: string;
+  change_amount: string;
+  change_percentage: string;
+  volume: string;
+}
+
+// Add this function before the DashboardPage component
+const fetchMarketMovers = async () => {
+  try {
+    const response = await fetch(
+      `https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey=${process.env.NEXT_PUBLIC_ALPHA_VANTAGE_KEY}`
+    );
+    const data = await response.json();
+    return data as MarketMovers;
+  } catch (error) {
+    console.error('Error fetching market movers:', error);
+    return null;
+  }
+};
+
 export default function DashboardPage() {
   const router = useRouter();
+  const graphRef = useRef<HTMLDivElement>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [stocks, setStocks] = useState<Record<string, StockData>>({});
@@ -801,7 +1166,7 @@ export default function DashboardPage() {
   const [currentStockIndex, setCurrentStockIndex] = useState(0);
   const [companyOverview, setCompanyOverview] = useState<CompanyOverview | null>(null);
   const [isCryptoMode, setIsCryptoMode] = useState(false);
-  const [showNews, setShowNews] = useState(true); // Change default to true
+  const [showNews, setShowNews] = useState(true);
   const [cryptoPrices, setCryptoPrices] = useState<CryptoPrices>({
     BTC: { price: 0, change: 0 },
     ETH: { price: 0, change: 0 },
@@ -819,17 +1184,24 @@ export default function DashboardPage() {
   const [portfolioHistory, setPortfolioHistory] = useState<{ date: string; value: number }[]>([]);
   const [selectedTimeframe, setSelectedTimeframe] = useState("1M");
   const [portfolioPage, setPortfolioPage] = useState(0);
-  const stocksPerPage = 5;
+  const stocksPerPage = 8;
   const pagedPortfolio = useMemo(() => {
     const sorted = [...portfolio].sort((a, b) => (b.total_value ?? 0) - (a.total_value ?? 0));
     const filtered = sorted.filter(item => item.symbol !== selectedStock);
     const start = portfolioPage * stocksPerPage;
     return filtered.slice(start, start + stocksPerPage);
   }, [portfolio, portfolioPage, selectedStock]);
+  const [apiCallsState, setApiCallsState] = useState<APICall[]>([]);
+
+  // Update the state whenever apiCalls changes
+  useEffect(() => {
+    setApiCallsState(apiCalls);
+  }, [apiCalls]);
 
   // Add this effect to handle crypto mode switch
   useEffect(() => {
     if (isCryptoMode) {
+      resetMoverContext();
       handleSelectStock('BTC');
     }
   }, [isCryptoMode]);
@@ -1177,13 +1549,18 @@ export default function DashboardPage() {
   // Add search functionality
   const handleSearch = async (query: string) => {
     setSearchQuery(query);
-    if (query.length < 2) {
+    if (!query.trim()) {
       setSearchResults([]);
       setShowSearchResults(false);
       return;
     }
 
+    // Reset mover context when manually searching
+    resetMoverContext();
+    
     setIsSearching(true);
+    setShowSearchResults(true);
+
     try {
       const res = await fetch(
         `https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords=${query}&apikey=${process.env.NEXT_PUBLIC_ALPHA_VANTAGE_KEY}`
@@ -1343,6 +1720,11 @@ export default function DashboardPage() {
           ...prev,
           [symbol]: updatedStock
         }));
+      }
+
+      // Scroll to the graph section
+      if (graphRef.current) {
+        graphRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     } catch (err) {
       console.error("Error loading stock:", err);
@@ -2046,6 +2428,7 @@ export default function DashboardPage() {
     role: 'user' | 'assistant';
     content: string;
     id: string;
+    moverType?: 'gainers' | 'losers' | 'active';
   }
 
   // Add these state variables inside the DashboardPage component
@@ -2091,12 +2474,26 @@ export default function DashboardPage() {
     }
   };
 
-  // Add this function to rewrite message content by prefilling the input
-  const handleRewrite = (text: string) => {
-    const rewritePrompt = `Please rewrite the following to be more professional:\n${text}`;
-    setInput(rewritePrompt);
+  // Add this function to fetch news for a stock
+  const fetchStockNews = async (symbol: string) => {
+    try {
+      const response = await fetch(
+        `https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers=${symbol}&apikey=${process.env.NEXT_PUBLIC_ALPHA_VANTAGE_KEY}`
+      );
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch news for ${symbol}`);
+      }
+      
+      const data = await response.json();
+      return data.feed || [];
+    } catch (error) {
+      console.error(`Error fetching news for ${symbol}:`, error);
+      return [];
+    }
   };
 
+  // Modify the handleSubmit function to use intent parsing
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -2111,33 +2508,23 @@ export default function DashboardPage() {
     setThinkingState('thinking');
 
     try {
-      // First check if it's a buy request
+      // Check for buy/sell requests first
       const buyRequest = parseBuyRequest(userMessage);
-      
       if (buyRequest) {
-        setThinkingState(null);
-        // Handle buy request without streaming
-        setMessages(prev => [...prev, { 
-          role: 'assistant', 
-          content: `You asked me to buy ${buyRequest.shares} shares of ${buyRequest.symbol}. Would you like to confirm this purchase?`,
-          id: generateMessageId()
-        }]);
-        
         setPendingAction({
           type: 'buy_stock',
           symbol: buyRequest.symbol,
           shares: buyRequest.shares
         });
-        setConfirmationMessage(`You asked me to buy ${buyRequest.shares} shares of ${buyRequest.symbol}. Would you like to confirm this purchase?`);
         setEditableShares(buyRequest.shares);
+        setConfirmationMessage(`You asked me to buy ${buyRequest.shares} shares of ${buyRequest.symbol}. Would you like to confirm this purchase?`);
         setIsLoading(false);
+        setThinkingState(null);
         return;
       }
 
-      // Check if it's a sell request
       const sellRequest = parseSellRequest(userMessage);
       if (sellRequest) {
-        setThinkingState(null);
         // Check if user owns the stock
         const portfolioItem = portfolio.find(item => item.symbol === sellRequest.symbol);
         if (!portfolioItem) {
@@ -2147,6 +2534,7 @@ export default function DashboardPage() {
             id: generateMessageId()
           }]);
           setIsLoading(false);
+          setThinkingState(null);
           return;
         }
         if (portfolioItem.shares < sellRequest.shares) {
@@ -2156,32 +2544,42 @@ export default function DashboardPage() {
             id: generateMessageId()
           }]);
           setIsLoading(false);
+          setThinkingState(null);
           return;
         }
-        
-        // Handle sell request without streaming
-        setMessages(prev => [...prev, { 
-          role: 'assistant', 
-          content: `You asked me to sell ${sellRequest.shares} shares of ${sellRequest.symbol}. Would you like to confirm this sale?`,
-          id: generateMessageId()
-        }]);
-        
         setPendingAction({
           type: 'sell_stock',
           symbol: sellRequest.symbol,
           shares: sellRequest.shares
         });
-        setConfirmationMessage(`You asked me to sell ${sellRequest.shares} shares of ${sellRequest.symbol}. Would you like to confirm this sale?`);
         setEditableShares(sellRequest.shares);
+        setConfirmationMessage(`You asked me to sell ${sellRequest.shares} shares of ${sellRequest.symbol}. Would you like to confirm this sale?`);
         setIsLoading(false);
+        setThinkingState(null);
         return;
       }
 
-      // For regular chat, use streaming
-      setTimeout(() => {
-        if (isLoading) setThinkingState('reasoning');
-      }, 1500);
-      
+      // If no buy/sell request, proceed with normal intent parsing
+      const intent = await parseIntent(userMessage, portfolio);
+      setThinkingState('reasoning');
+
+      // Map intent to API calls
+      const apiResults = await mapIntentToAPI(intent);
+
+      // Create context with API results
+      const context = {
+        intent,
+        apiResults,
+        portfolio,
+        selectedStock,
+        isCryptoMode,
+        marketStatus,
+        watchlist,
+        portfolioMetrics,
+        userId: profile?.id
+      };
+
+      // Make the API call with the context
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -2189,15 +2587,7 @@ export default function DashboardPage() {
         },
         body: JSON.stringify({
           message: userMessage,
-          context: {
-            selectedStock,
-            portfolio,
-            isCryptoMode,
-            marketStatus,
-            watchlist,
-            portfolioMetrics,
-            userId: profile?.id
-          }
+          context
         }),
       });
 
@@ -2243,7 +2633,7 @@ export default function DashboardPage() {
         id: generateMessageId()
       }]);
       setStreamingMessage('');
-      
+
     } catch (error) {
       console.error('Error:', error);
       setThinkingState(null);
@@ -2432,7 +2822,7 @@ export default function DashboardPage() {
           
           console.log('New portfolio position created');
         }
-      } else { // sell_stock
+      } else if (type === 'sell_stock') {
         if (!existingPosition) {
           throw new Error(`You don't own any shares of ${symbol}`);
         }
@@ -2668,6 +3058,313 @@ export default function DashboardPage() {
     return null;
   };
 
+  // Add these new state variables
+  const [marketMovers, setMarketMovers] = useState<MarketMovers | null>(null);
+  const [marketMoversLoading, setMarketMoversLoading] = useState(true);
+  const [selectedMoverType, setSelectedMoverType] = useState<'gainers' | 'losers' | 'active' | null>(null);
+
+  // Add this useEffect to fetch market movers
+  useEffect(() => {
+    const fetchMovers = async () => {
+      try {
+        const data = await fetchMarketMovers();
+        setMarketMovers(data);
+        setMarketMoversLoading(false);
+      } catch (error) {
+        console.error('Error fetching market movers:', error);
+        setMarketMoversLoading(false);
+      }
+    };
+
+    fetchMovers();
+  }, []); // Empty dependency array means this only runs once on mount
+
+  // Add this function to handle mover box clicks
+  const handleMoverClick = async (type: 'gainers' | 'losers' | 'active') => {
+    setSelectedMoverType(type);
+    let movers: MarketMoverItem[] = [];
+    
+    if (marketMovers) {
+      switch (type) {
+        case 'gainers':
+          movers = marketMovers.top_gainers;
+          break;
+        case 'losers':
+          movers = marketMovers.top_losers;
+          break;
+        case 'active':
+          movers = marketMovers.most_actively_traded;
+          break;
+      }
+    }
+    
+    const tickers = movers.slice(0, 5).map((mover: MarketMoverItem) => mover.ticker).join(', ');
+    
+    // Create the new message
+    const message = `Here are today's ${type === 'active' ? 'most actively traded' : `top ${type}`} stocks:\n${tickers}\n\nWould you like to analyze any of these stocks in detail?`;
+    const newMessage = { role: 'assistant' as const, content: message, id: generateMessageId(), moverType: type };
+    
+    // Remove any existing message of the same mover type and add the new one
+    setMessages(prev => {
+      const filteredMessages = prev.filter(msg => msg.moverType !== type);
+      return [...filteredMessages, newMessage];
+    });
+    
+    scrollToBottom();
+  };
+
+  // Add function to reset mover context
+  const resetMoverContext = () => {
+    setSelectedMoverType(null);
+    // Remove all mover-type messages from chat
+    setMessages(prev => prev.filter(msg => !msg.moverType));
+  };
+
+  // Add function to handle stock selection that resets mover context
+  const handleSelectStockWithContext = (symbol: string) => {
+    // Don't reset mover context when clicking tickers - keep the coloring active
+    handleSelectStock(symbol);
+  };
+
+  // Update the getStockColor function to check all active mover types in chat history
+  const getActiveMoverTypes = (): ('gainers' | 'losers' | 'active')[] => {
+    return Array.from(new Set(messages.filter(msg => msg.moverType).map(msg => msg.moverType!)));
+  };
+
+  // Modify formatMessageContent to use all active mover types
+  const formatMessageContentWithAllMovers = (content: string, portfolio: PortfolioItem[], onSelectStock: (symbol: string) => void) => {
+    const activeMoverTypes = getActiveMoverTypes();
+    
+    // Enhanced getStockColor that checks all active mover types
+    const getStockColorForAllMovers = (symbol: string) => {
+      // Check each active mover type to see if this symbol belongs to it
+      for (const moverType of activeMoverTypes) {
+        if (marketMovers) {
+          let movers: MarketMoverItem[] = [];
+          switch (moverType) {
+            case 'gainers':
+              movers = marketMovers.top_gainers;
+              break;
+            case 'losers':
+              movers = marketMovers.top_losers;
+              break;
+            case 'active':
+              movers = marketMovers.most_actively_traded;
+              break;
+          }
+          
+          const moverIndex = movers.findIndex(mover => mover.ticker === symbol);
+          if (moverIndex >= 0) {
+            return MOVER_COLORS[moverType][moverIndex % MOVER_COLORS[moverType].length];
+          }
+        }
+      }
+      
+      // Default to portfolio-based coloring
+      const index = portfolio.findIndex(item => item.symbol === symbol);
+      return index >= 0 ? COLORS[index % COLORS.length] : COLORS[0];
+    };
+
+    // Match stock symbols (uppercase letters) but exclude common words
+    const commonWords = [
+      // Common words
+      'I', 'A', 'THE', 'IN', 'ON', 'AT', 'TO', 'AND', 'OR', 'BUT', 'FOR', 'WITH', 'BY', 'FROM', 'AS', 'IS', 'ARE', 'WAS', 'WERE', 'BE', 'BEEN', 'BEING', 'HAVE', 'HAS', 'HAD', 'DO', 'DOES', 'DID', 'WILL', 'WOULD', 'SHALL', 'SHOULD', 'MAY', 'MIGHT', 'MUST', 'CAN', 'COULD',
+      // Government agencies
+      'FBI', 'CIA', 'NSA', 'IRS', 'DOD', 'DOJ', 'TSA', 'DHS', 'ICE', 'HUD', 'UN', 'WHO', 'CDC', 'NATO', 'ATF', 'FAA', 'GAO', 'DOE', 'FEC',
+      // Universities
+      'MIT', 'UCLA', 'UCB', 'USC', 'NYU', 'PSU', 'UIUC', 'ASU', 'RPI', 'BU', 'LSU', 'UF', 'UCF', 'UCI', 'UCSB', 'UCR', 'UCSF', 'UCS',
+      // Tech terms
+      'API', 'CPU', 'GPU', 'RAM', 'HTML', 'CSS', 'HTTP', 'HTTPS', 'SQL', 'USB', 'JSON', 'XML', 'PDF', 'DNS', 'LAN', 'WAN', 'IP', 'AI', 'IDE', 'CLI',
+      'FTP', 'SSH', 'VPN', 'IRC', 'NTP', 'MQTT', 'SSL', 'TLS', 'CDN', 'SaaS', 'PaaS', 'IaaS',
+      // Financial terms
+      'ROI', 'IPO', 'P&L', 'APR', 'ATM', 'GDP', 'CPI', 'EOY', 'DRIP', 'FIFO', 'LIFO', 'WACC', 'YTD', 'TTM', 'EPS', 'BPS', 'EV', 'EBIT', 'EBITDA',
+      // Media
+      'BBC', 'CNN', 'ABC', 'NBC', 'MTV', 'ESPN', 'HBO', 'TMZ', 'NPR', 'FOX', 'CNBC', 'BLOOM', 'WSJ', 'FT', 'NYT',
+      // Internet slang
+      'ASAP', 'LOL', 'BRB', 'IMO', 'FYI', 'TBD', 'ETA', 'FAQ', 'TLDR', 'DIY', 'OMG', 'NGL', 'WTF', 'FOMO', 'YOLO',
+      // Business terms
+      'NGO', 'LLC', 'LP', 'INC', 'LTD', 'S-CORP', 'DWI', 'DOA', 'CPA', 'JFK',
+      // Trading indicators
+      'MACD', 'RSI', 'ADX', 'BOLL', 'EMA', 'SMA', 'ROC', 'OBV', 'DCF', 'FED', 'FOMC',
+      // Financial instruments
+      'CDS', 'MBS', 'TIPS', 'REPO', 'LIBOR', 'SOFR', 'BID', 'ASK', 'NAV', 'AUM', 'FSA', 'FINRA',
+      // Financial institutions
+      'FDIC', 'CFPB', 'OCC', 'CFTC', 'BIS', 'IBRD', 'IFC', 'WTO'
+    ];
+    
+    const commonWordsPattern = commonWords.join('|');
+    const stockRegex = new RegExp(`(?<!${commonWordsPattern})(?<=\\b)([A-Z]{2,5}(?:\\.[A-Z])?)(?=\\b)`, 'g');
+    
+    return content.split('\n').map((line, i) => {
+      // Find all unique matches first
+      const matches = Array.from(new Set(line.match(stockRegex) || []));
+      
+      // Create a map of matches to their positions
+      const matchPositions = new Map();
+      let match;
+      while ((match = stockRegex.exec(line)) !== null) {
+        if (!matchPositions.has(match[0])) {
+          matchPositions.set(match[0], match.index);
+        }
+      }
+      
+      // Sort matches by their position in the text
+      matches.sort((a, b) => (matchPositions.get(a) || 0) - (matchPositions.get(b) || 0));
+      
+      // Split the line by the matches
+      let parts = [line];
+      matches.forEach(match => {
+        parts = parts.flatMap(part => {
+          const split = part.split(match);
+          return split.flatMap((p, i) => i === 0 ? [p] : [match, p]);
+        });
+      });
+      
+      return (
+        <p key={i} className="mb-2 last:mb-0">
+          {parts.map((part, j) => (
+            <span key={j}>
+              {matches.includes(part) ? (
+                <button
+                  onClick={() => onSelectStock(part)}
+                  className="px-1.5 py-0.5 rounded-md font-medium hover:opacity-80 transition-opacity"
+                  style={{ 
+                    backgroundColor: `${getStockColorForAllMovers(part)}20`,
+                    color: getStockColorForAllMovers(part),
+                    border: `1px solid ${getStockColorForAllMovers(part)}40`
+                  }}
+                >
+                  {part}
+                </button>
+              ) : (
+                part
+              )}
+            </span>
+          ))}
+        </p>
+      );
+    });
+  };
+
+  const handleRewrite = (text: string) => {
+    setInput(text);
+    if (textareaRef.current) textareaRef.current.focus();
+  };
+
+  // Add helper function to trigger copilot queries
+  const handleCopilotQuery = async (queryType: 'news' | 'metrics' | 'similar') => {
+    if (!selectedStock) return;
+    
+    let query = '';
+    switch (queryType) {
+      case 'news':
+        query = `What's the latest news about ${selectedStock}? Analyze recent developments and sentiment.`;
+        break;
+      case 'metrics':
+        query = `Analyze the recent financial metrics and performance indicators for ${selectedStock}. Include key ratios and trends.`;
+        break;
+      case 'similar':
+        query = `Find stocks similar to ${selectedStock}. Show companies in the same sector with comparable metrics and performance.`;
+        break;
+    }
+
+    // Trigger the query directly without setting input
+    const userMessageId = generateMessageId();
+    setMessages(prev => [...prev, { role: 'user', content: query, id: userMessageId }]);
+    setIsLoading(true);
+    setStreamingMessage('');
+    setThinkingState('thinking');
+
+    try {
+      // Parse intent and proceed with normal copilot flow
+      const intent = await parseIntent(query, portfolio);
+      setThinkingState('reasoning');
+
+      // Map intent to API calls
+      const apiResults = await mapIntentToAPI(intent);
+
+      // Create context with API results
+      const context = {
+        intent,
+        apiResults,
+        portfolio,
+        selectedStock,
+        isCryptoMode,
+        marketStatus,
+        watchlist,
+        portfolioMetrics,
+        userId: profile?.id
+      };
+
+      // Make the API call with the context
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: query,
+          context
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get response');
+      }
+
+      // Handle streaming response
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No reader available');
+
+      const decoder = new TextDecoder();
+      let accumulatedMessage = '';
+      setThinkingState(null);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n').filter(line => line.trim() !== '');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') continue;
+
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices[0]?.delta?.content || '';
+              accumulatedMessage += content;
+              setStreamingMessage(accumulatedMessage);
+            } catch (e) {
+              console.error('Error parsing streaming response:', e);
+            }
+          }
+        }
+      }
+
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: accumulatedMessage,
+        id: generateMessageId()
+      }]);
+      setStreamingMessage('');
+
+    } catch (error) {
+      console.error('Error:', error);
+      setThinkingState(null);
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: 'Sorry, I encountered an error. Please try again.',
+        id: generateMessageId()
+      }]);
+    } finally {
+      setIsLoading(false);
+      setThinkingState(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-black">
@@ -2784,20 +3481,14 @@ export default function DashboardPage() {
                   <div>
                     <p className="text-sm text-gray-400 mb-1">Total Balance</p>
                     <p className="text-3xl font-semibold text-white tracking-tight">
-                      ${profile?.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      ${((profile?.balance || 0) + portfolioMetrics.totalValue).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                   </div>
                   <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <p className="text-sm text-gray-400 mb-1">Total Return</p>
-                      <p className={`text-lg font-semibold ${portfolioMetrics.totalReturn >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                        {portfolioLoading ? '----' : `${portfolioMetrics.totalReturn >= 0 ? '+' : ''}${portfolioMetrics.totalReturn.toFixed(2)}%`}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-400 mb-1">24h Return</p>
-                      <p className={`text-lg font-semibold ${portfolioMetrics.dailyReturn >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                        {portfolioLoading ? '----' : `${portfolioMetrics.dailyReturn >= 0 ? '+' : ''}${portfolioMetrics.dailyReturn.toFixed(2)}%`}
+                      <p className="text-sm text-gray-400 mb-1">Cash Balance</p>
+                      <p className="text-lg font-semibold text-white">
+                        ${profile?.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                     </div>
                     <div>
@@ -2806,28 +3497,31 @@ export default function DashboardPage() {
                         {portfolioLoading ? '----' : `$${portfolioMetrics.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                       </p>
                     </div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-4">
                     <div> 
-                      <p className="text-sm text-gray-400 mb-1">Total Cost</p>
+                      <p className="text-sm text-gray-400 mb-1">Cost Basis</p>
                       <p className="text-lg font-semibold text-white">
                         {portfolioLoading ? '----' : `$${portfolioMetrics.totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                       </p>
                     </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-400 mb-1">24h Return</p>
+                      <p className={`text-lg font-semibold ${portfolioMetrics.dailyReturn >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                        {portfolioLoading ? '----' : `${portfolioMetrics.dailyReturn >= 0 ? '+' : ''}${portfolioMetrics.dailyReturn.toFixed(2)}%`}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-400 mb-1">Total Return</p>
+                      <p className={`text-lg font-semibold ${portfolioMetrics.totalReturn >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                        {portfolioLoading ? '----' : `${portfolioMetrics.totalReturn >= 0 ? '+' : ''}${portfolioMetrics.totalReturn.toFixed(2)}%`}
+                      </p>
+                    </div>
+                  
                     <div>
                       <p className="text-sm text-gray-400 mb-1">Holdings</p>
                       <p className="text-lg font-semibold text-white">
                         {portfolioLoading ? '----' : portfolio.length}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-400 mb-1">Largest Position</p>
-                      <p className="text-xl font-semibold text-white font-['SF_Pro_Display']">
-                        {portfolioLoading ? '----' : portfolio.length > 0 ? 
-                          portfolio.reduce((max, item) => 
-                            (item.total_value ?? 0) > (max.total_value ?? 0) ? item : max
-                          , portfolio[0]).symbol 
-                          : 'N/A'}
                       </p>
                     </div>
                   </div>
@@ -2846,48 +3540,119 @@ export default function DashboardPage() {
           {/* Portfolio Performance and Stock Info Row */}
           <div className="w-full flex flex-row gap-8 mt-4">
             {/* Portfolio Stock Info List */}
-            <div className="flex flex-col w-1/2 max-w-[340px] mx-auto">
-              <h3 className="text-lg font-semibold text-white mb-3 text-center">Your Stocks</h3>
-              <div className="flex flex-col items-start">
-                {pagedPortfolio.length === 0 ? (
-                  <div className="text-gray-500">No stocks in portfolio.</div>
-                ) : (
-                  pagedPortfolio.map((item) => {
-                    const change = item.gain_loss_percentage ?? 0;
-                    const price = item.current_price ?? 0;
-                    return (
-                      <div key={item.symbol} className="flex items-center gap-4 mb-3 w-full">
-                        {logos[item.symbol] && (
-                          <img 
-                            src={logos[item.symbol]} 
-                            alt={`${item.symbol} logo`} 
-                            className="w-8 h-8 rounded-full object-contain bg-white mr-2"
-                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                          />
-                        )}
-                        <span className="font-bold text-xl text-white tracking-wide min-w-[60px]">{item.symbol}</span>
-                        <span className="text-lg text-gray-200 font-mono">${price.toFixed(2)}</span>
-                        <span className={`px-3 py-1 rounded-full text-sm font-semibold ${change >= 0 ? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400'}`}>{change >= 0 ? '+' : ''}{change.toFixed(2)}%</span>
+            <div className="flex flex-col w-1/2 max-w-[400px] mx-auto">
+              <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700/50 p-4 h-[314px] flex flex-col">
+                <h3 className="text-lg font-semibold text-white mb-3 text-center">Portfolio Holdings</h3>
+                
+                {/* Holdings List Container */}
+                <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                  <div className="space-y-1 pr-1">
+                    {pagedPortfolio.length === 0 ? (
+                      <div className="text-center py-8">
+                        <div className="text-gray-400 mb-2">📈</div>
+                        <div className="text-gray-400 text-sm">No stocks in portfolio</div>
+                        <div className="text-gray-500 text-xs mt-1">Start investing to see your holdings here</div>
                       </div>
-                    );
-                  })
-                )}
-                {/* Pagination Button */}
-                {portfolio.length > (portfolioPage + 1) * stocksPerPage && (
-                  <button
-                    className="mt-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition font-semibold"
-                    onClick={() => setPortfolioPage((prev) => prev + 1)}
-                  >
-                    Load Next 5
-                  </button>
-                )}
-                {portfolioPage > 0 && (
-                  <button
-                    className="mt-2 ml-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition font-semibold"
-                    onClick={() => setPortfolioPage((prev) => prev - 1)}
-                  > 
-                    Previous
-                  </button>
+                    ) : (
+                      pagedPortfolio.map((item) => {
+                        const change = item.gain_loss_percentage ?? 0;
+                        const price = item.current_price ?? 0;
+                        const totalValue = item.total_value ?? 0;
+                        const shares = item.shares;
+                        
+                        return (
+                          <div 
+                            key={item.symbol} 
+                            className="bg-gray-700/40 rounded border border-gray-600/20 p-1.5 hover:bg-gray-700/60 transition-all duration-200 cursor-pointer group"
+                            onClick={() => handleSelectStockWithContext(item.symbol)}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              {/* Logo */}
+                              <div className="w-6 h-6 rounded-full flex items-center justify-center bg-gray-600/50 border border-gray-500/30 group-hover:border-gray-400/50 transition-colors flex-shrink-0">
+                                {logos[item.symbol] ? (
+                                  <img 
+                                    src={logos[item.symbol]} 
+                                    alt={`${item.symbol} logo`} 
+                                    className="w-4 h-4 rounded-full object-contain"
+                                    onError={(e) => { 
+                                      e.currentTarget.style.display = 'none';
+                                      const nextEl = e.currentTarget.nextElementSibling as HTMLElement;
+                                      if (nextEl) {
+                                        nextEl.style.display = 'flex';
+                                      }
+                                    }}
+                                  />
+                                ) : null}
+                                <div 
+                                  className={`w-full h-full rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold ${logos[item.symbol] ? 'hidden' : 'flex'}`}
+                                >
+                                  {item.symbol.slice(0, 2)}
+                                </div>
+                              </div>
+                              
+                              {/* Symbol and Shares */}
+                              <div className="flex-shrink-0 min-w-0">
+                                <div className="font-semibold text-xs text-white truncate">{item.symbol}</div>
+                                <div className="text-xs text-gray-400 leading-none">{shares}×</div>
+                              </div>
+                              
+                              {/* Price */}
+                              <div className="text-xs font-mono text-white flex-shrink-0">
+                                ${price.toFixed(2)}
+                              </div>
+                              
+                              {/* Change */}
+                              <div className="flex-shrink-0">
+                                <span className={`px-1 py-0.5 rounded text-xs font-medium leading-none ${
+                                  change >= 0 
+                                    ? 'bg-green-900/50 text-green-400' 
+                                    : 'bg-red-900/50 text-red-400'
+                                }`}>
+                                  {change >= 0 ? '+' : ''}{change.toFixed(1)}%
+                                </span>
+                              </div>
+                              
+                              {/* Total Value */}
+                              <div className="text-xs text-gray-300 flex-shrink-0 text-right min-w-[45px]">
+                                ${totalValue >= 1000 ? `${(totalValue/1000).toFixed(1)}k` : totalValue.toFixed(0)}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+                
+                {/* Pagination Controls */}
+                {portfolio.length > stocksPerPage && (
+                  <div className="flex justify-center items-center gap-2 mt-3 pt-3 border-t border-gray-600/30">
+                    {portfolioPage > 0 && (
+                      <button
+                        className="p-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors duration-200"
+                        onClick={() => setPortfolioPage((prev) => prev - 1)}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                      </button>
+                    )}
+                    
+                    <span className="px-2 text-gray-400 text-xs">
+                      {Math.min((portfolioPage + 1) * stocksPerPage, portfolio.length)} of {portfolio.length}
+                    </span>
+                    
+                    {portfolio.length > (portfolioPage + 1) * stocksPerPage && (
+                      <button
+                        className="p-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors duration-200"
+                        onClick={() => setPortfolioPage((prev) => prev + 1)}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -3020,6 +3785,33 @@ export default function DashboardPage() {
                   <>
                     {/* Chat Messages */}
                     <div className="w-full max-w-md flex-1 overflow-y-auto px-4 space-y-4 mb-4">
+                      {/* Mover Context Indicator */}
+                      {getActiveMoverTypes().length > 0 && (
+                        <div className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 border border-blue-400/30 rounded-xl p-3 mb-4">
+                          <div className="flex items-center justify-center">
+                            <div className="flex items-center gap-3">
+                              {getActiveMoverTypes().map((moverType, index) => (
+                                <div key={moverType} className="flex items-center gap-2">
+                                  <div className={`w-3 h-3 rounded-full ${
+                                    moverType === 'gainers' ? 'bg-green-500' :
+                                    moverType === 'losers' ? 'bg-red-500' :
+                                    'bg-purple-500'
+                                  }`}></div>
+                                  <span className="text-sm text-white font-semibold">
+                                    {moverType === 'gainers' ? 'Top Gainers' :
+                                     moverType === 'losers' ? 'Top Losers' :
+                                     'Most Traded'}
+                                  </span>
+                                  {index < getActiveMoverTypes().length - 1 && (
+                                    <span className="text-gray-400 mx-1">•</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
                       {messages.length === 1 ? (
                         <>
                      
@@ -3039,7 +3831,11 @@ export default function DashboardPage() {
                       ) : (
                         <>
                           {messages.map((message) => (
-                            <div key={message.id} className={`${message.role === 'user' ? 'ml-auto' : 'mr-auto'} max-w-[80%] group`}>
+                            <div 
+                              key={message.id} 
+                              className={`${message.role === 'user' ? 'ml-auto' : 'mr-auto'} max-w-[80%] group animate-fade-in`}
+                              style={{ animation: 'fadeIn 0.3s ease-out' }}
+                            >
                               {/* Toolbar above assistant messages */}
                               {message.role === 'assistant' && (
                                 <div className="flex space-x-1 mb-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -3070,20 +3866,21 @@ export default function DashboardPage() {
                                   : 'bg-[#23294a] text-white'
                               }`}>
                                 <div className="prose prose-invert max-w-none break-words whitespace-pre-wrap">
-                                  {message.content.split('\n').map((line, i) => (
-                                    <p key={i} className="mb-2 last:mb-0">{line}</p>
-                                  ))}
+                                  {message.role === 'assistant' 
+                                    ? formatMessageContentWithAllMovers(message.content, portfolio, handleSelectStockWithContext)
+                                    : message.content.split('\n').map((line, i) => (
+                                        <p key={i} className="mb-2 last:mb-0">{line}</p>
+                                      ))
+                                  }
                                 </div>
                               </div>
                             </div>
                           ))}
                           {streamingMessage && (
-                            <div className="mr-auto max-w-[80%]">
+                            <div className="mr-auto max-w-[80%] animate-fade-in" style={{ animation: 'fadeIn 0.3s ease-out' }}>
                               <div className="bg-[#23294a] rounded-xl p-4 text-white">
                                 <div className="prose prose-invert max-w-none break-words whitespace-pre-wrap">
-                                  {streamingMessage.split('\n').map((line, i) => (
-                                    <p key={i} className="mb-2 last:mb-0">{line}</p>
-                                  ))}
+                                  {formatMessageContentWithAllMovers(streamingMessage, portfolio, handleSelectStockWithContext)}
                                 </div>
                               </div>
                             </div>
@@ -3183,32 +3980,64 @@ export default function DashboardPage() {
                       <div className="w-full max-w-md px-4 mb-8">
                         <div className="grid grid-cols-2 gap-4">
                           <button
-                            onClick={() => setInput("Which cryptocurrencies have gained more than 20% this week?")}
+                            onClick={() => {
+                              const message = "What's my current capital gains tax liability based on my portfolio? (20% bracket)";
+                              setInput(message);
+                              setTimeout(() => {
+                                const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+                                const form = document.querySelector('form');
+                                if (form) form.dispatchEvent(submitEvent);
+                              }, 0);
+                            }}
                             className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-green-400/50 hover:border-green-400 text-left shadow-lg"
                           >
-                            <div className="font-semibold text-green-400 mb-2">🪙 Crypto</div>
-                            <div className="text-xs text-gray-300">Which cryptocurrencies have gained more than 20% this week?</div>
+                            <div className="font-semibold text-green-400 mb-2">Tax Liability Report</div>
+                            <div className="text-xs text-gray-300">What's my current capital gains tax liability based on my portfolio? (20% bracket) </div>
                           </button>
                           <button
-                            onClick={() => setInput("What's the latest news affecting the stock market today?")}
+                            onClick={() => {
+                              const message = "Summarize today's market sentiment on my top 3 holdings.";
+                              setInput(message);
+                              setTimeout(() => {
+                                const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+                                const form = document.querySelector('form');
+                                if (form) form.dispatchEvent(submitEvent);
+                              }, 0);
+                            }}
                             className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-yellow-400/50 hover:border-yellow-400 text-left shadow-lg"
                           >
-                            <div className="font-semibold text-yellow-400 mb-2">📰 News</div>
-                            <div className="text-xs text-gray-300">What's the latest news affecting the stock market today?</div>
+                            <div className="font-semibold text-yellow-400 mb-2">Current News</div>
+                            <div className="text-xs text-gray-300">Summarize today's market sentiment on my top 3 holdings.</div>
                           </button>
                           <button
-                            onClick={() => setInput("What are the top performing stocks today?")}
+                            onClick={() => {
+                              const message = "What percentage of my portfolio is in each sector? How can I further diversify my portfolio?";
+                              setInput(message);
+                              setTimeout(() => {
+                                const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+                                const form = document.querySelector('form');
+                                if (form) form.dispatchEvent(submitEvent);
+                              }, 0);
+                            }}
                             className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-blue-400/50 hover:border-blue-400 text-left shadow-lg"
                           >
-                            <div className="font-semibold text-blue-400 mb-2">📈 Performance</div>
-                            <div className="text-xs text-gray-300">What are the top performing stocks today?</div>
+                            <div className="font-semibold text-blue-400 mb-2">Risk Assessment</div>
+                            <div className="text-xs text-gray-300">What percentage of my portfolio is in each sector? How can I further diversify my portfolio?</div>
                           </button>
                           <button
-                            onClick={() => setInput("What are the key financial metrics for MSFT?")}
+                            onClick={() => {
+                              const message = "Compare current RSI and MACD of my top performing stocks.";
+                              setInput(message);
+                              setTimeout(() => {
+                                const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+                                const form = document.querySelector('form');
+                                if (form) form.dispatchEvent(submitEvent);
+                              }, 0);
+                            }}
                             className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-purple-400/50 hover:border-purple-400 text-left shadow-lg"
                           >
-                            <div className="font-semibold text-purple-400 mb-2">📊 Metrics</div>
-                            <div className="text-xs text-gray-300">What are the key financial metrics for MSFT?</div>
+                            <div className="font-semibold text-purple-400 mb-2">Portfolio Metrics</div>
+                            <div className="text-xs text-gray-300">Compare current RSI and MACD of my weakest stocks.</div>
                           </button>
                         </div>
                         <div className="mt-6 flex justify-center">
@@ -3261,7 +4090,7 @@ export default function DashboardPage() {
                   {searchResults.map((result) => (
                     <div
                       key={result.symbol}
-                      onClick={() => handleSelectStock(result.symbol)}
+                      onClick={() => handleSelectStockWithContext(result.symbol)}
                       className="px-6 py-4 hover:bg-gray-700 cursor-pointer border-b border-gray-700 last:border-b-0 transition-colors duration-150"
                     >
                       <div className="flex justify-between items-center">
@@ -3290,39 +4119,48 @@ export default function DashboardPage() {
             </div>
 
             {/* Search Suggestions */}
-            <div className="mt-6 grid grid-cols-2 gap-4">
-              {/* Suggestion Box 1 */}
-              <div className="p-4 bg-gray-800/50 rounded-xl border-2 border-blue-400/50 hover:border-blue-400 transition-all duration-200 cursor-pointer">
-                <h3 className="text-lg font-semibold text-white mb-2">Popular Stocks</h3>
-                <p className="text-gray-400 text-sm">AAPL, MSFT, GOOGL, AMZN, TSLA</p>
+            <div className="mt-4 flex gap-4 justify-center">
+              {/* Top Gainers */}
+              <div 
+                className="p-3 bg-gray-800/50 rounded-xl border-2 border-green-400/50 hover:border-green-400 transition-all duration-200 cursor-pointer w-[220px]"
+                onClick={() => handleMoverClick('gainers')}
+              >
+                <h3 className="text-base font-semibold text-white mb-1">Top Gainers</h3>
+                <p className="text-gray-400 text-xs">
+                  {marketMoversLoading ? 'Loading...' : 
+                    marketMovers?.top_gainers.slice(0, 5).map(mover => mover.ticker).join(', ')}
+                </p>
               </div>
 
-              {/* Suggestion Box 2 */}
-              <div className="p-4 bg-gray-800/50 rounded-xl border-2 border-purple-400/50 hover:border-purple-400 transition-all duration-200 cursor-pointer">
-                <h3 className="text-lg font-semibold text-white mb-2">Top Gainers</h3>
-                <p className="text-gray-400 text-sm">NVDA, AMD, META, NFLX, PYPL</p>
+              {/* Top Losers */}
+              <div 
+                className="p-3 bg-gray-800/50 rounded-xl border-2 border-red-400/50 hover:border-red-400 transition-all duration-200 cursor-pointer w-[220px]"
+                onClick={() => handleMoverClick('losers')}
+              >
+                <h3 className="text-base font-semibold text-white mb-1">Top Losers</h3>
+                <p className="text-gray-400 text-xs">
+                  {marketMoversLoading ? 'Loading...' : 
+                    marketMovers?.top_losers.slice(0, 5).map(mover => mover.ticker).join(', ')}
+                </p>
               </div>
 
-              {/* Suggestion Box 3 */}
-              <div className="p-4 bg-gray-800/50 rounded-xl border-2 border-green-400/50 hover:border-green-400 transition-all duration-200 cursor-pointer">
-                <h3 className="text-lg font-semibold text-white mb-2">Market Leaders</h3>
-                <p className="text-gray-400 text-sm">JPM, V, MA, BAC, WMT</p>
-              </div>
-
-              {/* Suggestion Box 4 */}
-              <div className="p-4 bg-gray-800/50 rounded-xl border-2 border-yellow-400/50 hover:border-yellow-400 transition-all duration-200 cursor-pointer">
-                <h3 className="text-lg font-semibold text-white mb-2">Trending ETFs</h3>
-                <p className="text-gray-400 text-sm">SPY, QQQ, VTI, ARKK, VOO</p>
+              {/* Most Actively Traded */}
+              <div 
+                className="p-3 bg-gray-800/50 rounded-xl border-2 border-purple-400/50 hover:border-purple-400 transition-all duration-200 cursor-pointer w-[220px]"
+                onClick={() => handleMoverClick('active')}
+              >
+                <h3 className="text-base font-semibold text-white mb-1">Most Traded</h3>
+                <p className="text-gray-400 text-xs">
+                  {marketMoversLoading ? 'Loading...' : 
+                    marketMovers?.most_actively_traded.slice(0, 5).map(mover => mover.ticker).join(', ')}
+                </p>
               </div>
             </div>
+            
+              
 
-            {/* See More Button */}
-            <div className="mt-6 flex justify-center">
-              <button className="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white font-semibold hover:opacity-90 transition-opacity duration-200">
-                See More Suggestions
-              </button>
-            </div>
-          </div>
+          
+              </div>
 
           {/* Stock/Crypto Price History */}
           <div className={`w-full max-w-7xl p-6 ${isCryptoMode ? 'bg-black' : 'bg-gray-900'} rounded-lg shadow-lg ${isCryptoMode ? 'crypto-glow' : ''}`}> 
@@ -3351,21 +4189,51 @@ export default function DashboardPage() {
                       <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.967a1 1 0 00.95.69h4.175c.969 0 1.371 1.24.588 1.81l-3.38 2.455a1 1 0 00-.364 1.118l1.287 3.966c.3.922-.755 1.688-1.54 1.118l-3.38-2.454a1 1 0 00-1.175 0l-3.38 2.454c-.784.57-1.838-.196-1.54-1.118l1.287-3.966a1 1 0 00-.364-1.118L2.05 9.394c-.783-.57-.38-1.81.588-1.81h4.175a1 1 0 00.95-.69l1.286-3.967z"/></svg>
                       {isInWatchlist(selectedStock) ? 'Watching' : 'Watch'}
                     </button>
-                    {getSharesOwned(selectedStock) > 0 && (
-                      <div className="px-4 py-2 bg-gray-700 text-white rounded-lg flex items-center gap-2 ml-auto">
-                        <span className="text-sm">Current Position: {getSharesOwned(selectedStock)} {isCryptoMode ? 'Coins' : 'Shares'}</span>
-                      </div>
-                    )}
+                    
+                    {/* Ask Copilot Section */}
+                    <div className="flex items-center gap-2 ml-4">
+                      <span className="text-sm font-medium bg-gradient-to-r from-green-400 via-blue-400 to-purple-400 bg-clip-text text-transparent">Ask Copilot:</span>
+                      <button
+                        onClick={() => handleCopilotQuery('news')}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-gray-700 hover:bg-gray-600 border border-gray-600 hover:border-gray-500 text-white rounded-lg shadow-sm hover:shadow-md active:scale-95 transition-all font-medium text-sm"
+                        title="Get recent news analysis"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/>
+                        </svg>
+                        News
+                      </button>
+                      <button
+                        onClick={() => handleCopilotQuery('metrics')}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-gray-700 hover:bg-gray-600 border border-gray-600 hover:border-gray-500 text-white rounded-lg shadow-sm hover:shadow-md active:scale-95 transition-all font-medium text-sm"
+                        title="Analyze financial metrics"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                        Metrics
+                      </button>
+                      <button
+                        onClick={() => handleCopilotQuery('similar')}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-gray-700 hover:bg-gray-600 border border-gray-600 hover:border-gray-500 text-white rounded-lg shadow-sm hover:shadow-md active:scale-95 transition-all font-medium text-sm"
+                        title="Find similar stocks"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                        </svg>
+                        Similar
+                      </button>
+                    </div>
                   </div>
                 </div>
               
             </div>
             {stocks[selectedStock]?.history ? (
-              <div className="grid grid-cols-12 gap-6">
+              <div ref={graphRef} className="grid grid-cols-12 gap-6">
                 {/* Main Content - Graph and Company Info */}
                 <div className="col-span-8 space-y-6">
                   {/* Graph Section */}
-                  <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700/50 p-6">
+                  <div ref={graphRef} className="bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700/50 p-6">
                     <div className="h-[400px] w-full">
                       {selectedStock ? (
                         <div className="relative h-full">
@@ -3585,7 +4453,7 @@ export default function DashboardPage() {
                   {/* Latest News */}
                   <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700/50 p-6">
                     <h4 className="text-lg font-bold text-white mb-4 border-b border-gray-700/50 pb-2">
-                      Latest News
+                      Latest News Involving: {selectedStock}
                       <InfoBubble title="Latest News" content="Recent news articles about the selected stock with sentiment analysis." />
                     </h4>
                     <CompactNewsCard items={news} />
@@ -3634,7 +4502,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <button
-                        onClick={() => handleSelectStock(item.symbol)}
+                        onClick={() => handleSelectStockWithContext(item.symbol)}
                         className="text-green-500 hover:text-green-400"
                       >
                         View Details
@@ -3705,7 +4573,7 @@ export default function DashboardPage() {
                       <span className="text-white">${stocks[selectedStock].price.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-300">Total cost:</span>
+                      <span className="text-gray-300">Cost Bassis:</span>
                       <span className="text-white">${(stocks[selectedStock].price * shareAmount).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
