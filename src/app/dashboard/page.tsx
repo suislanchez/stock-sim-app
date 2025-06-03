@@ -298,6 +298,64 @@ const styles = `
   background-clip: text;
   color: transparent;
 }
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.animate-slideUp {
+  animation: slideUp 0.6s ease-out;
+}
+
+.animate-slideDown {
+  animation: slideDown 0.3s ease-out;
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.5s ease-out;
+}
+
+.glass-effect {
+  backdrop-filter: blur(16px);
+  background: rgba(17, 24, 39, 0.8);
+  border: 1px solid rgba(75, 85, 99, 0.3);
+}
 `;
 
 interface CompanyOverview {
@@ -545,9 +603,9 @@ const sentimentLabels = {
 
 const CompactNewsCard = ({ items }: { items: NewsItem[] }) => {
   return (
-    <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700/50 p-4 h-[405px] overflow-y-auto">
+    <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700/50 p-4 h-full overflow-y-auto">
       <div className="space-y-4">
-        {items.slice(0, 15).map((item, index) => (
+        {items.slice(0, 25).map((item, index) => (
           <div key={index} className="p-3 hover:bg-gray-700/50 rounded-lg transition-colors">
             <div className="min-w-0">
               <div className="flex items-center gap-2 mb-2">
@@ -1792,6 +1850,23 @@ export default function DashboardPage() {
         throw new Error(`Failed to update portfolio: ${portfolioError.message}`);
       }
 
+      // Record the order in orders table for history tracking
+      const { error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          user_id: profile.id,
+          symbol: selectedStock,
+          shares: shareAmount,
+          price: stocks[selectedStock].price,
+          type: 'buy'
+        });
+
+      if (orderError) {
+        console.error("Error recording order:", orderError);
+        // Don't throw here, as the main transaction succeeded
+        console.warn("Portfolio updated but order history may not be recorded");
+      }
+
       // Then update the user's balance
       const { error: balanceError } = await supabase
         .from('profiles')
@@ -2031,6 +2106,23 @@ export default function DashboardPage() {
           console.error("Error deleting portfolio position:", portfolioError);
           throw new Error(`Failed to delete portfolio position: ${portfolioError.message}`);
         }
+      }
+
+      // Record the order in orders table for history tracking
+      const { error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          user_id: profile.id,
+          symbol: selectedStock,
+          shares: sellAmount,
+          price: stocks[selectedStock].price,
+          type: 'sell'
+        });
+
+      if (orderError) {
+        console.error("Error recording order:", orderError);
+        // Don't throw here, as the main transaction succeeded
+        console.warn("Portfolio updated but order history may not be recorded");
       }
 
       // Update user's balance
@@ -2861,6 +2953,24 @@ export default function DashboardPage() {
           }
         }
       }
+
+      // Record the order in orders table for history tracking
+      const orderType = type === 'buy_stock' ? 'buy' : 'sell';
+      const { error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          user_id: currentProfile.id,
+          symbol: symbol,
+          shares: shares,
+          price: price,
+          type: orderType
+        });
+
+      if (orderError) {
+        console.error("Error recording order:", orderError);
+        // Don't throw here, as the main transaction succeeded
+        console.warn("Trade completed but order history may not be recorded");
+      }
       
       // Update profile state
       setProfile(prev => prev ? { ...prev, balance: newBalance } : prev);
@@ -3472,57 +3582,81 @@ export default function DashboardPage() {
           {/* User Info and Portfolio Allocation */}
           <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             {/* User Info */}
-            <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700/50 p-6">
+            <div className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-xl rounded-3xl border border-gray-700/50 p-8 shadow-2xl hover:border-gray-600/50 transition-all duration-500 animate-slideUp">
               <div>
-                <h1 className="text-xl font-semibold text-gray-300 mb-4">
-                  Welcome back, {profile?.email}
-                </h1>
-                <div className="space-y-4">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-3 h-3 bg-gradient-to-r from-green-400 to-blue-400 rounded-full animate-pulse"></div>
+                  <h1 className="text-2xl font-bold bg-gradient-to-r from-white via-blue-100 to-blue-200 bg-clip-text text-transparent">
+                    Welcome back, {profile?.email}
+                  </h1>
+                </div>
+                <div className="space-y-6">
                   <div>
-                    <p className="text-sm text-gray-400 mb-1">Total Balance</p>
-                    <p className="text-3xl font-semibold text-white tracking-tight">
+                    <p className="text-sm text-gray-400 mb-2 font-medium">Total Balance</p>
+                    <p className="text-4xl font-bold text-transparent bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text tracking-tight">
                       ${((profile?.balance || 0) + portfolioMetrics.totalValue).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <p className="text-sm text-gray-400 mb-1">Cash Balance</p>
-                      <p className="text-lg font-semibold text-white">
-                        ${profile?.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </p>
+                  <div className="grid grid-cols-3 gap-6">
+                    <div className="text-center group cursor-pointer">
+                      <div className="bg-gradient-to-br from-blue-500/10 to-blue-600/10 rounded-2xl p-4 border border-blue-500/20 group-hover:border-blue-400/40 transition-all duration-300">
+                        <p className="text-sm text-gray-400 mb-2 font-medium">Cash Balance</p>
+                        <p className="text-lg font-bold text-blue-400">
+                          ${profile?.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-400 mb-1">Portfolio Value</p>
-                      <p className="text-lg font-semibold text-white">
-                        {portfolioLoading ? '----' : `$${portfolioMetrics.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                      </p>
+                    <div className="text-center group cursor-pointer">
+                      <div className="bg-gradient-to-br from-purple-500/10 to-purple-600/10 rounded-2xl p-4 border border-purple-500/20 group-hover:border-purple-400/40 transition-all duration-300">
+                        <p className="text-sm text-gray-400 mb-2 font-medium">Portfolio Value</p>
+                        <p className="text-lg font-bold text-purple-400">
+                          {portfolioLoading ? '----' : `$${portfolioMetrics.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                        </p>
+                      </div>
                     </div>
-                    <div> 
-                      <p className="text-sm text-gray-400 mb-1">Cost Basis</p>
-                      <p className="text-lg font-semibold text-white">
-                        {portfolioLoading ? '----' : `$${portfolioMetrics.totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                      </p>
+                    <div className="text-center group cursor-pointer">
+                      <div className="bg-gradient-to-br from-yellow-500/10 to-yellow-600/10 rounded-2xl p-4 border border-yellow-500/20 group-hover:border-yellow-400/40 transition-all duration-300">
+                        <p className="text-sm text-gray-400 mb-2 font-medium">Cost Basis</p>
+                        <p className="text-lg font-bold text-yellow-400">
+                          {portfolioLoading ? '----' : `$${portfolioMetrics.totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <p className="text-sm text-gray-400 mb-1">24h Return</p>
-                      <p className={`text-lg font-semibold ${portfolioMetrics.dailyReturn >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                        {portfolioLoading ? '----' : `${portfolioMetrics.dailyReturn >= 0 ? '+' : ''}${portfolioMetrics.dailyReturn.toFixed(2)}%`}
-                      </p>
+                  <div className="grid grid-cols-3 gap-6">
+                    <div className="text-center group cursor-pointer">
+                      {(() => {
+                        const isPositive = portfolioMetrics.dailyReturn >= 0;
+                        return (
+                          <div className={`bg-gradient-to-br ${isPositive ? 'from-green-500/10 to-green-600/10' : 'from-red-500/10 to-red-600/10'} rounded-2xl p-4 border ${isPositive ? 'border-green-500/20 group-hover:border-green-400/40' : 'border-red-500/20 group-hover:border-red-400/40'} transition-all duration-300`}>
+                            <p className="text-sm text-gray-400 mb-2 font-medium">24h Return</p>
+                            <p className={`text-lg font-bold ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+                              {portfolioLoading ? '----' : `${portfolioMetrics.dailyReturn >= 0 ? '+' : ''}${portfolioMetrics.dailyReturn.toFixed(2)}%`}
+                            </p>
+                          </div>
+                        );
+                      })()}
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-400 mb-1">Total Return</p>
-                      <p className={`text-lg font-semibold ${portfolioMetrics.totalReturn >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                        {portfolioLoading ? '----' : `${portfolioMetrics.totalReturn >= 0 ? '+' : ''}${portfolioMetrics.totalReturn.toFixed(2)}%`}
-                      </p>
+                    <div className="text-center group cursor-pointer">
+                      {(() => {
+                        const isPositive = portfolioMetrics.totalReturn >= 0;
+                        return (
+                          <div className={`bg-gradient-to-br ${isPositive ? 'from-green-500/10 to-green-600/10' : 'from-red-500/10 to-red-600/10'} rounded-2xl p-4 border ${isPositive ? 'border-green-500/20 group-hover:border-green-400/40' : 'border-red-500/20 group-hover:border-red-400/40'} transition-all duration-300`}>
+                            <p className="text-sm text-gray-400 mb-2 font-medium">Total Return</p>
+                            <p className={`text-lg font-bold ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+                              {portfolioLoading ? '----' : `${portfolioMetrics.totalReturn >= 0 ? '+' : ''}${portfolioMetrics.totalReturn.toFixed(2)}%`}
+                            </p>
+                          </div>
+                        );
+                      })()}
                     </div>
-                  
-                    <div>
-                      <p className="text-sm text-gray-400 mb-1">Holdings</p>
-                      <p className="text-lg font-semibold text-white">
-                        {portfolioLoading ? '----' : portfolio.length}
-                      </p>
+                    <div className="text-center group cursor-pointer">
+                      <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/10 rounded-2xl p-4 border border-emerald-500/20 group-hover:border-emerald-400/40 transition-all duration-300">
+                        <p className="text-sm text-gray-400 mb-2 font-medium">Holdings</p>
+                        <p className="text-lg font-bold text-emerald-400">
+                          {portfolioLoading ? '----' : portfolio.length}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3530,7 +3664,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Portfolio Allocation */}
-            <div className="flex items-center justify-center">
+            <div className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-xl rounded-3xl border border-gray-700/50 p-8 shadow-2xl hover:border-gray-600/50 transition-all duration-500 animate-slideUp flex items-center justify-center">
               <div className="w-full max-w-[300px]">
                 <PortfolioPieChart portfolio={portfolio} loading={portfolioLoading} />
               </div>
@@ -3541,8 +3675,11 @@ export default function DashboardPage() {
           <div className="w-full flex flex-row gap-8 mt-4">
             {/* Portfolio Stock Info List */}
             <div className="flex flex-col w-1/2 max-w-[400px] mx-auto">
-              <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700/50 p-4 h-[314px] flex flex-col">
-                <h3 className="text-lg font-semibold text-white mb-3 text-center">Portfolio Holdings</h3>
+              <div className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-xl rounded-3xl border border-gray-700/50 p-6 h-[314px] flex flex-col shadow-2xl hover:border-gray-600/50 transition-all duration-500 animate-slideUp">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-3 h-3 bg-gradient-to-r from-purple-400 to-pink-400 rounded-full animate-pulse"></div>
+                  <h3 className="text-xl font-bold bg-gradient-to-r from-white via-purple-100 to-purple-200 bg-clip-text text-transparent">Portfolio Holdings</h3>
+                </div>
                 
                 {/* Holdings List Container */}
                 <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
@@ -3563,17 +3700,17 @@ export default function DashboardPage() {
                         return (
                           <div 
                             key={item.symbol} 
-                            className="bg-gray-700/40 rounded border border-gray-600/20 p-1.5 hover:bg-gray-700/60 transition-all duration-200 cursor-pointer group"
+                            className="bg-gradient-to-r from-gray-700/40 to-gray-800/40 backdrop-blur-sm rounded-2xl border border-gray-600/30 p-2 hover:border-gray-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-gray-500/10 cursor-pointer group transform hover:scale-[1.02]"
                             onClick={() => handleSelectStockWithContext(item.symbol)}
                           >
                             <div className="flex items-center justify-between gap-2">
                               {/* Logo */}
-                              <div className="w-6 h-6 rounded-full flex items-center justify-center bg-gray-600/50 border border-gray-500/30 group-hover:border-gray-400/50 transition-colors flex-shrink-0">
+                              <div className="w-7 h-7 rounded-2xl flex items-center justify-center bg-gradient-to-br from-gray-600/50 to-gray-700/50 border border-gray-500/30 group-hover:border-gray-400/50 transition-all duration-300 flex-shrink-0">
                                 {logos[item.symbol] ? (
                                   <img 
                                     src={logos[item.symbol]} 
                                     alt={`${item.symbol} logo`} 
-                                    className="w-4 h-4 rounded-full object-contain"
+                                    className="w-5 h-5 rounded-xl object-contain"
                                     onError={(e) => { 
                                       e.currentTarget.style.display = 'none';
                                       const nextEl = e.currentTarget.nextElementSibling as HTMLElement;
@@ -3584,7 +3721,7 @@ export default function DashboardPage() {
                                   />
                                 ) : null}
                                 <div 
-                                  className={`w-full h-full rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold ${logos[item.symbol] ? 'hidden' : 'flex'}`}
+                                  className={`w-full h-full rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold ${logos[item.symbol] ? 'hidden' : 'flex'}`}
                                 >
                                   {item.symbol.slice(0, 2)}
                                 </div>
@@ -3592,28 +3729,28 @@ export default function DashboardPage() {
                               
                               {/* Symbol and Shares */}
                               <div className="flex-shrink-0 min-w-0">
-                                <div className="font-semibold text-xs text-white truncate">{item.symbol}</div>
+                                <div className="font-bold text-sm text-white truncate group-hover:text-blue-300 transition-colors">{item.symbol}</div>
                                 <div className="text-xs text-gray-400 leading-none">{shares}×</div>
                               </div>
                               
                               {/* Price */}
-                              <div className="text-xs font-mono text-white flex-shrink-0">
+                              <div className="text-sm font-mono text-white flex-shrink-0">
                                 ${price.toFixed(2)}
                               </div>
                               
                               {/* Change */}
                               <div className="flex-shrink-0">
-                                <span className={`px-1 py-0.5 rounded text-xs font-medium leading-none ${
+                                <span className={`px-2 py-1 rounded-lg text-xs font-bold leading-none ${
                                   change >= 0 
-                                    ? 'bg-green-900/50 text-green-400' 
-                                    : 'bg-red-900/50 text-red-400'
+                                    ? 'bg-gradient-to-r from-green-500/20 to-green-600/20 text-green-400 border border-green-500/30' 
+                                    : 'bg-gradient-to-r from-red-500/20 to-red-600/20 text-red-400 border border-red-500/30'
                                 }`}>
                                   {change >= 0 ? '+' : ''}{change.toFixed(1)}%
                                 </span>
                               </div>
                               
                               {/* Total Value */}
-                              <div className="text-xs text-gray-300 flex-shrink-0 text-right min-w-[45px]">
+                              <div className="text-sm text-gray-300 flex-shrink-0 text-right min-w-[45px] font-medium">
                                 ${totalValue >= 1000 ? `${(totalValue/1000).toFixed(1)}k` : totalValue.toFixed(0)}
                               </div>
                             </div>
@@ -3626,10 +3763,10 @@ export default function DashboardPage() {
                 
                 {/* Pagination Controls */}
                 {portfolio.length > stocksPerPage && (
-                  <div className="flex justify-center items-center gap-2 mt-3 pt-3 border-t border-gray-600/30">
+                  <div className="flex justify-center items-center gap-3 mt-4 pt-4 border-t border-gray-600/30">
                     {portfolioPage > 0 && (
                       <button
-                        className="p-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors duration-200"
+                        className="p-2 bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-600 hover:to-gray-700 text-white rounded-xl transition-all duration-300 transform hover:scale-110 active:scale-95 shadow-lg"
                         onClick={() => setPortfolioPage((prev) => prev - 1)}
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3638,13 +3775,13 @@ export default function DashboardPage() {
                       </button>
                     )}
                     
-                    <span className="px-2 text-gray-400 text-xs">
+                    <span className="px-3 py-1 bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-300 rounded-full text-sm font-medium border border-blue-500/30">
                       {Math.min((portfolioPage + 1) * stocksPerPage, portfolio.length)} of {portfolio.length}
                     </span>
                     
                     {portfolio.length > (portfolioPage + 1) * stocksPerPage && (
                       <button
-                        className="p-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors duration-200"
+                        className="p-2 bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-600 hover:to-gray-700 text-white rounded-xl transition-all duration-300 transform hover:scale-110 active:scale-95 shadow-lg"
                         onClick={() => setPortfolioPage((prev) => prev + 1)}
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3658,8 +3795,11 @@ export default function DashboardPage() {
             </div>
             {/* Portfolio Performance Graph on the right */}
             <div className="flex-1 flex justify-end">
-              <div className="w-full max-w-xl bg-gray-800 rounded-lg p-4">
-                <h3 className="text-lg text-center font-semibold text-white mb-3">Portfolio Performance</h3>
+              <div className="w-full max-w-xl bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-xl rounded-3xl border border-gray-700/50 p-6 shadow-2xl hover:border-gray-600/50 transition-all duration-500 animate-slideUp">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-3 h-3 bg-gradient-to-r from-green-400 to-emerald-400 rounded-full animate-pulse"></div>
+                  <h3 className="text-xl font-bold bg-gradient-to-r from-white via-green-100 to-green-200 bg-clip-text text-transparent">Portfolio Performance</h3>
+                </div>
                 <div className="h-[250px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={portfolioHistory}>
@@ -4163,31 +4303,34 @@ export default function DashboardPage() {
               </div>
 
           {/* Stock/Crypto Price History */}
-          <div className={`w-full max-w-7xl p-6 ${isCryptoMode ? 'bg-black' : 'bg-gray-900'} rounded-lg shadow-lg ${isCryptoMode ? 'crypto-glow' : ''}`}> 
-            <div className="flex justify-between items-center mb-6">
+          <div className={`w-full max-w-7xl p-8 bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-xl rounded-3xl border border-gray-700/50 shadow-2xl hover:border-gray-600/50 transition-all duration-500 ${isCryptoMode ? 'crypto-glow' : ''}`}> 
+            <div className="flex justify-between items-center mb-8">
               <div className="flex items-center gap-4">
                 
                   <div className="flex items-center justify-center gap-2 ml-4">
                     <button
                       onClick={() => setShowBuyModal(true)}
-                      className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-full shadow hover:from-green-600 hover:to-emerald-700 active:scale-95 transition-all font-semibold text-base"
+                      className="group relative flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white rounded-2xl shadow-lg hover:shadow-green-500/25 active:scale-95 transition-all duration-300 font-bold text-base overflow-hidden transform hover:scale-105"
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
-                      Buy
+                      <div className="absolute inset-0 bg-gradient-to-r from-green-400 to-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                      <svg className="w-5 h-5 relative z-10" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+                      <span className="relative z-10">Buy</span>
                     </button>
                     <button
                       onClick={() => setShowSellModal(true)}
-                      className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-full shadow hover:from-red-600 hover:to-pink-600 active:scale-95 transition-all font-semibold text-base"
+                      className="group relative flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-400 hover:to-pink-400 text-white rounded-2xl shadow-lg hover:shadow-red-500/25 active:scale-95 transition-all duration-300 font-bold text-base overflow-hidden transform hover:scale-105"
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4"/></svg>
-                      Sell
+                      <div className="absolute inset-0 bg-gradient-to-r from-red-400 to-pink-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                      <svg className="w-5 h-5 relative z-10" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4"/></svg>
+                      <span className="relative z-10">Sell</span>
                     </button>
                     <button
                       onClick={isInWatchlist(selectedStock) ? () => handleRemoveFromWatchlist(selectedStock) : handleAddToWatchlist}
-                      className={`flex items-center gap-2 px-5 py-2.5 ${isInWatchlist(selectedStock) ? 'bg-gradient-to-r from-yellow-400 to-yellow-500' : 'bg-gradient-to-r from-blue-500 to-indigo-500'} text-white rounded-full shadow hover:opacity-90 active:scale-95 transition-all font-semibold text-base`}
+                      className={`group relative flex items-center gap-2 px-6 py-3 ${isInWatchlist(selectedStock) ? 'bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-300 hover:to-yellow-400' : 'bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-400 hover:to-indigo-400'} text-white rounded-2xl shadow-lg hover:opacity-90 active:scale-95 transition-all duration-300 font-bold text-base overflow-hidden transform hover:scale-105`}
                     >
-                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.967a1 1 0 00.95.69h4.175c.969 0 1.371 1.24.588 1.81l-3.38 2.455a1 1 0 00-.364 1.118l1.287 3.966c.3.922-.755 1.688-1.54 1.118l-3.38-2.454a1 1 0 00-1.175 0l-3.38 2.454c-.784.57-1.838-.196-1.54-1.118l1.287-3.966a1 1 0 00-.364-1.118L2.05 9.394c-.783-.57-.38-1.81.588-1.81h4.175a1 1 0 00.95-.69l1.286-3.967z"/></svg>
-                      {isInWatchlist(selectedStock) ? 'Watching' : 'Watch'}
+                      <div className="absolute inset-0 bg-gradient-to-r from-current to-current opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
+                      <svg className="w-5 h-5 relative z-10" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.967a1 1 0 00.95.69h4.175c.969 0 1.371 1.24.588 1.81l-3.38 2.455a1 1 0 00-.364 1.118l1.287 3.966c.3.922-.755 1.688-1.54 1.118l-3.38-2.454a1 1 0 00-1.175 0l-3.38 2.454c-.784.57-1.838-.196-1.54-1.118l1.287-3.966a1 1 0 00-.364-1.118L2.05 9.394c-.783-.57-.38-1.81.588-1.81h4.175a1 1 0 00.95-.69l1.286-3.967z"/></svg>
+                      <span className="relative z-10">{isInWatchlist(selectedStock) ? 'Watching' : 'Watch'}</span>
                     </button>
                     
                     {/* Ask Copilot Section */}
@@ -4233,7 +4376,7 @@ export default function DashboardPage() {
                 {/* Main Content - Graph and Company Info */}
                 <div className="col-span-8 space-y-6">
                   {/* Graph Section */}
-                  <div ref={graphRef} className="bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700/50 p-6">
+                  <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700/50 p-6">
                     <div className="h-[400px] w-full">
                       {selectedStock ? (
                         <div className="relative h-full">
@@ -4372,91 +4515,90 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Right Sidebar - Today's Trading and Technical Indicators */}
-                <div className="col-span-4 space-y-6">
+                <div className="col-span-4 space-y-4">
                   {/* Today's Trading */}
-                  <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700/50 p-6">
-                    <h4 className="text-lg font-bold text-white mb-4 border-b border-gray-700/50 pb-2">
-                      Today's Trading
+                  <div className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-xl rounded-2xl border border-gray-700/50 p-4 shadow-xl hover:border-gray-600/50 transition-all duration-300">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-2 h-2 bg-gradient-to-r from-blue-400 to-cyan-400 rounded-full animate-pulse"></div>
+                      <h4 className="text-lg font-bold bg-gradient-to-r from-white via-blue-100 to-cyan-200 bg-clip-text text-transparent">
+                        Today's Trading
+                      </h4>
                       <InfoBubble title="Today's Trading" content={sectionInfo.trading} />
-                    </h4>
+                    </div>
                     {stocks[selectedStock]?.dailyData ? (
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-sm text-gray-400 mb-1">Open</p>
-                            <p className="text-base font-semibold text-white">
-                              ${stocks[selectedStock].dailyData.open.toFixed(2)}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-400 mb-1">High</p>
-                            <p className="text-base font-semibold text-white">
-                              ${stocks[selectedStock].dailyData.high.toFixed(2)}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-400 mb-1">Low</p>
-                            <p className="text-base font-semibold text-white">
-                              ${stocks[selectedStock].dailyData.low.toFixed(2)}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-400 mb-1">Close</p>
-                            <p className="text-base font-semibold text-white">
-                              ${stocks[selectedStock].dailyData.close.toFixed(2)}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-400 mb-1">Change</p>
-                            <p className={`text-base font-semibold ${stocks[selectedStock].dailyData.change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                              {stocks[selectedStock].dailyData.change >= 0 ? '+' : ''}{stocks[selectedStock].dailyData.change.toFixed(2)}%
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-400 mb-1">Volume</p>
-                            <p className="text-base font-semibold text-white">
-                              {stocks[selectedStock].dailyData.volume.toLocaleString()}
-                            </p>
-                          </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-gray-400">Open</span>
+                          <span className="text-sm font-semibold text-white">${stocks[selectedStock].dailyData.open.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-gray-400">High</span>
+                          <span className="text-sm font-semibold text-green-400">${stocks[selectedStock].dailyData.high.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-gray-400">Low</span>
+                          <span className="text-sm font-semibold text-red-400">${stocks[selectedStock].dailyData.low.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-gray-400">Close</span>
+                          <span className="text-sm font-semibold text-white">${stocks[selectedStock].dailyData.close.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-gray-400">Change</span>
+                          <span className={`text-sm font-semibold ${stocks[selectedStock].dailyData.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {stocks[selectedStock].dailyData.change >= 0 ? '+' : ''}{stocks[selectedStock].dailyData.change.toFixed(2)}%
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-gray-400">Volume</span>
+                          <span className="text-sm font-semibold text-blue-400">{stocks[selectedStock].dailyData.volume.toLocaleString()}</span>
                         </div>
                       </div>
                     ) : (
-                      <div className="animate-pulse space-y-4">
-                        <div className="h-4 bg-gray-700 rounded w-3/4"></div>
-                        <div className="h-4 bg-gray-700 rounded w-1/2"></div>
+                      <div className="animate-pulse space-y-2">
+                        <div className="h-3 bg-gray-700 rounded w-3/4"></div>
+                        <div className="h-3 bg-gray-700 rounded w-1/2"></div>
                       </div>
                     )}
                   </div>
 
                   {/* Technical Indicators */}
-                  <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700/50 p-6">
-                    <h4 className="text-lg font-bold text-white mb-4 border-b border-gray-700/50 pb-2">
-                      Technical Indicators
+                  <div className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-xl rounded-2xl border border-gray-700/50 p-4 shadow-xl hover:border-gray-600/50 transition-all duration-300">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-2 h-2 bg-gradient-to-r from-purple-400 to-pink-400 rounded-full animate-pulse"></div>
+                      <h4 className="text-lg font-bold bg-gradient-to-r from-white via-purple-100 to-pink-200 bg-clip-text text-transparent">
+                        Technical Indicators
+                      </h4>
                       <InfoBubble title="Technical Indicators" content={sectionInfo.technical} />
-                    </h4>
-                    <div className="space-y-4">
-                      <div>
-                        <p className="text-sm text-gray-400 mb-1">RSI (14)</p>
-                        <p className="text-base font-semibold text-white">58.2</p>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-gray-400">RSI (14)</span>
+                        <span className="text-sm font-semibold text-yellow-400">58.2</span>
                       </div>
-                      <div>
-                        <p className="text-sm text-gray-400 mb-1">MACD</p>
-                        <p className="text-base font-semibold text-white">2.5</p>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-gray-400">MACD</span>
+                        <span className="text-sm font-semibold text-cyan-400">2.5</span>
                       </div>
-                      <div>
-                        <p className="text-sm text-gray-400 mb-1">Moving Avg (50)</p>
-                        <p className="text-base font-semibold text-white">${stocks[selectedStock].price.toFixed(2)}</p>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-gray-400">Moving Avg (50)</span>
+                        <span className="text-sm font-semibold text-emerald-400">${stocks[selectedStock].price.toFixed(2)}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Latest News */}
-                  <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-700/50 p-6">
-                    <h4 className="text-lg font-bold text-white mb-4 border-b border-gray-700/50 pb-2">
-                      Latest News Involving: {selectedStock}
+                  <div className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-xl rounded-2xl border border-gray-700/50 p-4 shadow-xl hover:border-gray-600/50 transition-all duration-300 min-h-[400px]">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-2 h-2 bg-gradient-to-r from-orange-400 to-red-400 rounded-full animate-pulse"></div>
+                      <h4 className="text-lg font-bold bg-gradient-to-r from-white via-orange-100 to-red-200 bg-clip-text text-transparent">
+                        Latest News: {selectedStock}
+                      </h4>
                       <InfoBubble title="Latest News" content="Recent news articles about the selected stock with sentiment analysis." />
-                    </h4>
-                    <CompactNewsCard items={news} />
+                    </div>
+                    <div className="h-[650px] overflow-y-auto">
+                      <CompactNewsCard items={news} />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -4466,79 +4608,105 @@ export default function DashboardPage() {
           </div>
 
           {/* Portfolio Section */}
-          <div className={`w-full max-w-6xl p-6 ${isCryptoMode ? 'bg-purple-900/50' : 'bg-gray-900'} rounded-lg shadow-lg mt-6 ${isCryptoMode ? 'crypto-glow' : ''}`}>
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="font-bold text-xl text-white">Your Portfolio</h3>
+          <div className={`w-full max-w-6xl p-8 bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-xl rounded-3xl border border-gray-700/50 shadow-2xl hover:border-gray-600/50 transition-all duration-500 mt-8 ${isCryptoMode ? 'crypto-glow' : ''} animate-slideUp`}>
+            <div className="flex justify-between items-center mb-8">
+              <div className="flex items-center gap-3">
+                <div className="w-3 h-3 bg-gradient-to-r from-green-400 to-emerald-400 rounded-full animate-pulse"></div>
+                <h3 className="text-2xl font-bold bg-gradient-to-r from-white via-green-100 to-emerald-200 bg-clip-text text-transparent">Your Portfolio</h3>
+              </div>
             </div>
 
             {portfolioLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
-                <span className="ml-3 text-white">Loading portfolio...</span>
+              <div className="flex items-center justify-center py-12">
+                <div className="relative">
+                  <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-600"></div>
+                  <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-green-500 absolute top-0 left-0"></div>
+                </div>
+                <span className="ml-4 text-white text-lg font-medium animate-pulse">Loading portfolio...</span>
               </div>
             ) : portfolio.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-gray-400">Your portfolio is empty. Start by buying some stocks!</p>
+              <div className="text-center py-12">
+                <div className="text-6xl mb-4">📈</div>
+                <p className="text-gray-400 text-lg mb-2">Your portfolio is empty</p>
+                <p className="text-gray-500">Start by buying some stocks to see them here!</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {portfolio.map((item) => (
-                  <div key={item.symbol} className="p-4 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex items-center gap-3">
-                        {logos[item.symbol] && (
-                          <img 
-                            src={logos[item.symbol]} 
-                            alt={`${item.symbol} logo`} 
-                            className="w-8 h-8 rounded-full object-contain bg-white"
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                            }}
-                          />
-                        )}
+                  <div 
+                    key={item.symbol} 
+                    className="group bg-gradient-to-br from-gray-700/40 to-gray-800/40 backdrop-blur-sm rounded-2xl border border-gray-600/30 p-6 hover:border-gray-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-gray-500/10 transform hover:scale-[1.02] cursor-pointer"
+                  >
+                    <div className="flex justify-between items-start mb-6">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-br from-gray-600/50 to-gray-700/50 border border-gray-500/30 group-hover:border-gray-400/50 transition-all duration-300">
+                          {logos[item.symbol] ? (
+                            <img 
+                              src={logos[item.symbol]} 
+                              alt={`${item.symbol} logo`} 
+                              className="w-8 h-8 rounded-xl object-contain"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                const nextEl = e.currentTarget.nextElementSibling as HTMLElement;
+                                if (nextEl) {
+                                  nextEl.style.display = 'flex';
+                                }
+                              }}
+                            />
+                          ) : null}
+                          <div 
+                            className={`w-full h-full rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold ${logos[item.symbol] ? 'hidden' : 'flex'}`}
+                          >
+                            {item.symbol.slice(0, 2)}
+                          </div>
+                        </div>
                         <div>
-                          <h4 className="text-lg font-semibold text-white">{item.symbol}</h4>
-                          <p className="text-sm text-gray-400">{item.shares} shares</p>
+                          <h4 className="text-xl font-bold text-white group-hover:text-blue-300 transition-colors">{item.symbol}</h4>
+                          <p className="text-sm text-gray-400 font-medium">{item.shares} shares</p>
                         </div>
                       </div>
                       <button
                         onClick={() => handleSelectStockWithContext(item.symbol)}
-                        className="text-green-500 hover:text-green-400"
+                        className="group/btn relative px-4 py-2 bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-400 rounded-xl border border-green-500/30 hover:border-green-400/50 transition-all duration-300 font-semibold text-sm transform hover:scale-105 active:scale-95"
                       >
-                        View Details
+                        <span className="relative z-10">View Details</span>
                       </button>
                     </div>
 
-                    <div className="space-y-3">
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-400">Avg. Price</span>
-                        <span className="text-sm text-white">${item.average_price.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-400">Current Price</span>
-                        <span className="text-sm text-white">${item.current_price?.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-400">Total Value</span>
-                        <span className="text-sm text-white">${item.total_value?.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-400">Gain/Loss</span>
-                        <span className={`text-sm font-medium ${(item.gain_loss ?? 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                          {(item.gain_loss ?? 0) >= 0 ? '+' : ''}{item.gain_loss?.toFixed(2)} ({item.gain_loss_percentage?.toFixed(2)}%)
-                        </span>
+                    <div className="space-y-4">
+                      <div className="bg-gradient-to-r from-gray-600/20 to-gray-700/20 rounded-xl p-4 border border-gray-600/20">
+                        <div className="flex justify-between items-center mb-3">
+                          <span className="text-sm text-gray-400 font-medium">Avg. Price</span>
+                          <span className="text-sm text-white font-bold">${item.average_price.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center mb-3">
+                          <span className="text-sm text-gray-400 font-medium">Current Price</span>
+                          <span className="text-sm text-white font-bold">${item.current_price?.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center mb-3">
+                          <span className="text-sm text-gray-400 font-medium">Total Value</span>
+                          <span className="text-sm text-white font-bold">${item.total_value?.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-400 font-medium">Gain/Loss</span>
+                          <span className={`text-sm font-bold ${(item.gain_loss ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {(item.gain_loss ?? 0) >= 0 ? '+' : ''}${item.gain_loss?.toFixed(2)} ({item.gain_loss_percentage?.toFixed(2)}%)
+                          </span>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="mt-4 pt-4 border-t border-gray-700">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-400">Position</span>
-                        <span className="text-sm text-white">
-                          {((item.current_price || 0) * item.shares).toLocaleString('en-US', {
-                            style: 'currency',
-                            currency: 'USD'
-                          })}
-                        </span>
+                    <div className="mt-4 pt-4 border-t border-gray-600/30">
+                      <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-xl p-3 border border-blue-500/20">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-400 font-medium">Position Value</span>
+                          <span className="text-lg font-bold text-transparent bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text">
+                            {((item.current_price || 0) * item.shares).toLocaleString('en-US', {
+                              style: 'currency',
+                              currency: 'USD'
+                            })}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>

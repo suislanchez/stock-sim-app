@@ -73,6 +73,16 @@ const customStyles = `
     background: rgba(17, 24, 39, 0.8);
     border: 1px solid rgba(75, 85, 99, 0.3);
   }
+
+  /* Hide number input spinners */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
 `;
 
 interface FuturesPortfolio {
@@ -99,6 +109,18 @@ interface Profile {
   balance: number;
 }
 
+// Add interface for pending limit orders
+interface PendingOrder {
+  id: string;
+  symbol: string;
+  contracts: number;
+  limitPrice: number;
+  orderType: 'buy' | 'sell';
+  margin: number;
+  expiry: string;
+  createdAt: Date;
+}
+
 const FuturesPage: React.FC = () => {
   const router = useRouter();
   const [selectedContract, setSelectedContract] = useState<FuturesApiData | null>(null);
@@ -118,6 +140,9 @@ const FuturesPage: React.FC = () => {
   const [futuresData, setFuturesData] = useState<FuturesApiData[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [dataError, setDataError] = useState<string | null>(null);
+  
+  // Add state for pending limit orders
+  const [pendingOrders, setPendingOrders] = useState<PendingOrder[]>([]);
 
   useEffect(() => {
     loadFuturesData();
@@ -203,6 +228,28 @@ const FuturesPage: React.FC = () => {
 
           setFuturesPortfolio(positionsWithCurrentData);
         }
+
+        // Load pending limit orders
+        const { data: orders, error: ordersError } = await supabase
+          .from('pending_futures_orders')
+          .select('*')
+          .eq('user_id', profile.id);
+
+        if (ordersError) throw ordersError;
+
+        if (orders && orders.length > 0) {
+          const pendingOrdersList: PendingOrder[] = orders.map(order => ({
+            id: order.id,
+            symbol: order.symbol,
+            contracts: order.contracts,
+            limitPrice: order.limit_price,
+            orderType: order.order_type,
+            margin: order.margin,
+            expiry: order.expiry,
+            createdAt: new Date(order.created_at)
+          }));
+          setPendingOrders(pendingOrdersList);
+        }
       } catch (error) {
         console.error('Error loading futures positions:', error);
       }
@@ -210,6 +257,110 @@ const FuturesPage: React.FC = () => {
 
     loadFuturesPositions();
   }, [profile?.id, futuresData]);
+
+  // Add useEffect to check and execute pending limit orders
+  useEffect(() => {
+    if (pendingOrders.length === 0 || futuresData.length === 0) return;
+
+    const checkAndExecutePendingOrders = async () => {
+      const ordersToExecute: PendingOrder[] = [];
+      
+      pendingOrders.forEach(order => {
+        const currentContract = futuresData.find(contract => contract.symbol === order.symbol);
+        if (!currentContract) return;
+
+        const currentPrice = currentContract.price;
+        let shouldExecute = false;
+
+        if (order.orderType === 'buy') {
+          // Buy limit order executes when market price falls to or below limit price
+          shouldExecute = currentPrice <= order.limitPrice;
+        } else {
+          // Sell limit order executes when market price rises to or above limit price
+          shouldExecute = currentPrice >= order.limitPrice;
+        }
+
+        if (shouldExecute) {
+          ordersToExecute.push(order);
+        }
+      });
+
+      // Execute orders that meet price conditions
+      for (const order of ordersToExecute) {
+        await executeLimitOrder(order);
+      }
+    };
+
+    checkAndExecutePendingOrders();
+  }, [futuresData, pendingOrders]);
+
+  // Function to execute a limit order
+  const executeLimitOrder = async (order: PendingOrder) => {
+    if (!profile) return;
+
+    try {
+      // Create the position
+      const { data: newPosition, error } = await supabase
+        .from('futures_positions')
+        .insert({
+          user_id: profile.id,
+          symbol: order.symbol,
+          contracts: order.orderType === 'buy' ? order.contracts : -order.contracts,
+          entry_price: order.limitPrice, // Use limit price as entry price
+          margin: order.margin,
+          expiry: order.expiry
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Record the trade in orders table
+      const { error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          user_id: profile.id,
+          symbol: `${order.symbol}-FUT`,
+          shares: order.contracts,
+          price: order.limitPrice,
+          type: order.orderType
+        });
+
+      if (orderError) {
+        console.error("Error recording futures order:", orderError);
+      }
+
+      // Remove from pending orders table
+      const { error: deleteError } = await supabase
+        .from('pending_futures_orders')
+        .delete()
+        .eq('id', order.id);
+
+      if (deleteError) throw deleteError;
+
+      // Update local state
+      const newPortfolioPosition: FuturesPortfolio = {
+        id: newPosition.id,
+        symbol: order.symbol,
+        contracts: order.orderType === 'buy' ? order.contracts : -order.contracts,
+        entryPrice: order.limitPrice,
+        currentPrice: order.limitPrice,
+        pnl: 0,
+        pnlPercent: 0,
+        margin: order.margin,
+        expiry: order.expiry
+      };
+
+      setFuturesPortfolio(prev => [...prev, newPortfolioPosition]);
+      setPendingOrders(prev => prev.filter(p => p.id !== order.id));
+
+      // Show execution notification
+      alert(`Limit order executed: ${order.orderType.toUpperCase()} ${order.contracts} ${order.symbol} contracts at $${order.limitPrice}`);
+      
+    } catch (error) {
+      console.error('Error executing limit order:', error);
+    }
+  };
 
   const loadFuturesData = async () => {
     try {
@@ -355,58 +506,237 @@ const FuturesPage: React.FC = () => {
         return;
       }
 
-      // Save position to database
-      const { data: newPosition, error } = await supabase
-        .from('futures_positions')
-        .insert({
-          user_id: profile.id,
+      if (orderType === 'market') {
+        // Execute market order immediately
+        const { data: newPosition, error } = await supabase
+          .from('futures_positions')
+          .insert({
+            user_id: profile.id,
+            symbol: selectedContract.symbol,
+            contracts: action === 'buy' ? contracts : -contracts,
+            entry_price: selectedContract.price, // Use current market price
+            margin: marginRequired,
+            expiry: selectedContract.expiry
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        // Record the futures trade in orders table for history tracking
+        const { error: orderError } = await supabase
+          .from('orders')
+          .insert({
+            user_id: profile.id,
+            symbol: `${selectedContract.symbol}-FUT`,
+            shares: contracts,
+            price: selectedContract.price,
+            type: action
+          });
+
+        if (orderError) {
+          console.error("Error recording futures order:", orderError);
+        }
+
+        // Update user's balance (deduct margin)
+        const { error: balanceError } = await supabase
+          .from('profiles')
+          .update({ balance: profile.balance - marginRequired })
+          .eq('id', profile.id);
+
+        if (balanceError) {
+          // If balance update fails, delete the position we just created
+          await supabase
+            .from('futures_positions')
+            .delete()
+            .eq('id', newPosition.id);
+          throw balanceError;
+        }
+
+        // Update local state
+        setProfile(prev => prev ? { ...prev, balance: prev.balance - marginRequired } : null);
+
+        const newPortfolioPosition: FuturesPortfolio = {
+          id: newPosition.id,
           symbol: selectedContract.symbol,
-          contracts: action === 'buy' ? contracts : -contracts, // Negative for short positions
-          entry_price: entryPrice,
+          contracts: action === 'buy' ? contracts : -contracts,
+          entryPrice: selectedContract.price,
+          currentPrice: selectedContract.price,
+          pnl: 0,
+          pnlPercent: 0,
           margin: marginRequired,
           expiry: selectedContract.expiry
-        })
-        .select()
-        .single();
+        };
 
-      if (error) throw error;
+        setFuturesPortfolio(prev => [...prev, newPortfolioPosition]);
+        alert(`Market ${action.toUpperCase()} order executed for ${contracts} ${selectedContract.symbol} contracts at $${selectedContract.price.toFixed(2)}`);
 
-      // Update user's balance (deduct margin)
-      const { error: balanceError } = await supabase
-        .from('profiles')
-        .update({ balance: profile.balance - marginRequired })
-        .eq('id', profile.id);
+      } else {
+        // Handle limit order
+        const currentPrice = selectedContract.price;
+        const limitPriceNum = parseFloat(limitPrice);
+        let shouldExecuteImmediately = false;
 
-      if (balanceError) {
-        // If balance update fails, delete the position we just created
-        await supabase
-          .from('futures_positions')
-          .delete()
-          .eq('id', newPosition.id);
-        throw balanceError;
+        if (action === 'buy') {
+          // Buy limit order executes immediately if current price is at or below limit price
+          shouldExecuteImmediately = currentPrice <= limitPriceNum;
+        } else {
+          // Sell limit order executes immediately if current price is at or above limit price
+          shouldExecuteImmediately = currentPrice >= limitPriceNum;
+        }
+
+        if (shouldExecuteImmediately) {
+          // Execute immediately like a market order but at limit price
+          const { data: newPosition, error } = await supabase
+            .from('futures_positions')
+            .insert({
+              user_id: profile.id,
+              symbol: selectedContract.symbol,
+              contracts: action === 'buy' ? contracts : -contracts,
+              entry_price: limitPriceNum,
+              margin: marginRequired,
+              expiry: selectedContract.expiry
+            })
+            .select()
+            .single();
+
+          if (error) throw error;
+
+          // Record the trade
+          const { error: orderError } = await supabase
+            .from('orders')
+            .insert({
+              user_id: profile.id,
+              symbol: `${selectedContract.symbol}-FUT`,
+              shares: contracts,
+              price: limitPriceNum,
+              type: action
+            });
+
+          if (orderError) {
+            console.error("Error recording futures order:", orderError);
+          }
+
+          // Update balance
+          const { error: balanceError } = await supabase
+            .from('profiles')
+            .update({ balance: profile.balance - marginRequired })
+            .eq('id', profile.id);
+
+          if (balanceError) {
+            await supabase
+              .from('futures_positions')
+              .delete()
+              .eq('id', newPosition.id);
+            throw balanceError;
+          }
+
+          setProfile(prev => prev ? { ...prev, balance: prev.balance - marginRequired } : null);
+
+          const newPortfolioPosition: FuturesPortfolio = {
+            id: newPosition.id,
+            symbol: selectedContract.symbol,
+            contracts: action === 'buy' ? contracts : -contracts,
+            entryPrice: limitPriceNum,
+            currentPrice: currentPrice,
+            pnl: 0,
+            pnlPercent: 0,
+            margin: marginRequired,
+            expiry: selectedContract.expiry
+          };
+
+          setFuturesPortfolio(prev => [...prev, newPortfolioPosition]);
+          alert(`Limit ${action.toUpperCase()} order executed immediately for ${contracts} ${selectedContract.symbol} contracts at $${limitPriceNum.toFixed(2)}`);
+
+        } else {
+          // Create pending limit order
+          const { data: pendingOrder, error } = await supabase
+            .from('pending_futures_orders')
+            .insert({
+              user_id: profile.id,
+              symbol: selectedContract.symbol,
+              contracts: contracts,
+              limit_price: limitPriceNum,
+              order_type: action,
+              margin: marginRequired,
+              expiry: selectedContract.expiry
+            })
+            .select()
+            .single();
+
+          if (error) throw error;
+
+          // Update user's balance (reserve margin for pending order)
+          const { error: balanceError } = await supabase
+            .from('profiles')
+            .update({ balance: profile.balance - marginRequired })
+            .eq('id', profile.id);
+
+          if (balanceError) {
+            await supabase
+              .from('pending_futures_orders')
+              .delete()
+              .eq('id', pendingOrder.id);
+            throw balanceError;
+          }
+
+          setProfile(prev => prev ? { ...prev, balance: prev.balance - marginRequired } : null);
+
+          const newPendingOrder: PendingOrder = {
+            id: pendingOrder.id,
+            symbol: selectedContract.symbol,
+            contracts: contracts,
+            limitPrice: limitPriceNum,
+            orderType: action,
+            margin: marginRequired,
+            expiry: selectedContract.expiry,
+            createdAt: new Date()
+          };
+
+          setPendingOrders(prev => [...prev, newPendingOrder]);
+          
+          const priceDirection = action === 'buy' ? 'falls to' : 'rises to';
+          alert(`Limit ${action.toUpperCase()} order placed for ${contracts} ${selectedContract.symbol} contracts. Will execute when price ${priceDirection} $${limitPriceNum.toFixed(2)}`);
+        }
       }
-
-      // Update local state
-      setProfile(prev => prev ? { ...prev, balance: prev.balance - marginRequired } : null);
-
-      const newPortfolioPosition: FuturesPortfolio = {
-        id: newPosition.id,
-        symbol: selectedContract.symbol,
-        contracts: action === 'buy' ? contracts : -contracts,
-        entryPrice: entryPrice,
-        currentPrice: selectedContract.price,
-        pnl: 0,
-        pnlPercent: 0,
-        margin: marginRequired,
-        expiry: selectedContract.expiry
-      };
-
-      setFuturesPortfolio(prev => [...prev, newPortfolioPosition]);
-      alert(`${action.toUpperCase()} order placed for ${contracts} ${selectedContract.symbol} contracts`);
       
     } catch (error) {
       console.error('Error placing trade:', error);
       alert('Failed to place order. Please try again.');
+    }
+  };
+
+  // Function to cancel a pending order
+  const cancelPendingOrder = async (order: PendingOrder) => {
+    if (!profile) return;
+
+    try {
+      // Delete from database
+      const { error } = await supabase
+        .from('pending_futures_orders')
+        .delete()
+        .eq('id', order.id)
+        .eq('user_id', profile.id);
+
+      if (error) throw error;
+
+      // Return margin to user's balance
+      const { error: balanceError } = await supabase
+        .from('profiles')
+        .update({ balance: profile.balance + order.margin })
+        .eq('id', profile.id);
+
+      if (balanceError) throw balanceError;
+
+      // Update local state
+      setProfile(prev => prev ? { ...prev, balance: prev.balance + order.margin } : null);
+      setPendingOrders(prev => prev.filter(p => p.id !== order.id));
+
+      alert(`Pending order cancelled. Margin of $${order.margin} returned to your balance.`);
+      
+    } catch (error) {
+      console.error('Error cancelling order:', error);
+      alert('Failed to cancel order. Please try again.');
     }
   };
 
@@ -430,6 +760,26 @@ const FuturesPage: React.FC = () => {
         .eq('user_id', profile.id);
 
       if (deleteError) throw deleteError;
+
+      // Record the position closing in orders table for history tracking
+      // If original position was long (positive contracts), closing is a sell
+      // If original position was short (negative contracts), closing is a buy
+      const closeOrderType = position.contracts > 0 ? 'sell' : 'buy';
+      const { error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          user_id: profile.id,
+          symbol: `${position.symbol}-FUT`, // Add FUT suffix to distinguish from stocks
+          shares: Math.abs(position.contracts), // Store absolute number of contracts
+          price: currentPrice,
+          type: closeOrderType
+        });
+
+      if (orderError) {
+        console.error("Error recording futures close order:", orderError);
+        // Don't throw here, as the main transaction succeeded
+        console.warn("Futures position closed but order history may not be recorded");
+      }
 
       // Update user's balance
       const { error: balanceError } = await supabase
@@ -768,6 +1118,112 @@ const FuturesPage: React.FC = () => {
             </div>
           )}
 
+          {/* Pending Limit Orders */}
+          {pendingOrders.length > 0 && (
+            <div className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-xl rounded-3xl border border-gray-700/50 p-8 shadow-2xl hover:border-gray-600/50 transition-all duration-500 animate-slideUp">
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-4">
+                  <div className="w-3 h-3 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-full animate-pulse"></div>
+                  <h2 className="text-2xl font-bold text-white">Pending Limit Orders</h2>
+                  <div className="px-3 py-1 bg-yellow-500/20 text-yellow-300 rounded-full text-sm font-medium">
+                    {pendingOrders.length} pending
+                  </div>
+                </div>
+              </div>
+              
+              <div className="grid gap-4">
+                {pendingOrders.map((order, index) => {
+                  const currentContract = futuresData.find(contract => contract.symbol === order.symbol);
+                  const currentPrice = currentContract?.price || 0;
+                  const priceGap = order.orderType === 'buy' 
+                    ? ((currentPrice - order.limitPrice) / order.limitPrice * 100)
+                    : ((order.limitPrice - currentPrice) / currentPrice * 100);
+
+                  return (
+                    <div 
+                      key={order.id || index} 
+                      className="group bg-gradient-to-r from-yellow-900/20 to-orange-900/20 backdrop-blur-sm rounded-2xl p-6 border border-yellow-500/30 hover:border-yellow-400/50 transition-all duration-300 hover:shadow-lg hover:shadow-yellow-500/10 transform hover:scale-[1.01]"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-6 flex-1">
+                          {/* Order Direction and Symbol */}
+                          <div className="flex items-center gap-4">
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-sm ${
+                              order.orderType === 'buy' 
+                                ? 'bg-gradient-to-br from-green-500/20 to-emerald-500/20 text-green-400 border border-green-500/30'
+                                : 'bg-gradient-to-br from-red-500/20 to-rose-500/20 text-red-400 border border-red-500/30'
+                            }`}>
+                              {order.orderType === 'buy' ? '↗' : '↙'}
+                            </div>
+                            <div>
+                              <div className="text-xl font-bold text-white">{order.symbol}</div>
+                              <div className="text-sm text-gray-400 font-medium">
+                                {order.contracts} contracts • {order.orderType === 'buy' ? 'Buy' : 'Sell'} Limit
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Price Information */}
+                          <div className="grid grid-cols-2 gap-6">
+                            <div className="text-center">
+                              <div className="text-sm text-gray-400 font-medium">Limit Price</div>
+                              <div className="text-lg font-bold text-yellow-300">${order.limitPrice.toFixed(2)}</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-sm text-gray-400 font-medium">Current Price</div>
+                              <div className="text-lg font-bold text-white">${currentPrice.toFixed(2)}</div>
+                            </div>
+                          </div>
+
+                          {/* Price Gap and Status */}
+                          <div className="text-center">
+                            <div className="text-sm text-gray-400 font-medium">Price Gap</div>
+                            <div className={`text-lg font-bold ${
+                              Math.abs(priceGap) < 2 ? 'text-yellow-400' : 'text-gray-300'
+                            }`}>
+                              {priceGap >= 0 ? '+' : ''}{priceGap.toFixed(2)}%
+                            </div>
+                            <div className="text-xs text-gray-400 mt-1">
+                              {order.orderType === 'buy' 
+                                ? `Need price to fall ${Math.abs(priceGap).toFixed(1)}%` 
+                                : `Need price to rise ${Math.abs(priceGap).toFixed(1)}%`
+                              }
+                            </div>
+                          </div>
+
+                          {/* Margin and Time */}
+                          <div className="text-center">
+                            <div className="text-sm text-gray-400 font-medium">Margin Reserved</div>
+                            <div className="text-lg font-bold text-white">${order.margin.toFixed(0)}</div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              {new Date(order.createdAt).toLocaleDateString()}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Cancel Order Button */}
+                        <div className="ml-6">
+                          <button
+                            onClick={() => cancelPendingOrder(order)}
+                            className="group/btn relative bg-gradient-to-r from-gray-600 to-gray-700 hover:from-red-500 hover:to-red-600 text-white px-6 py-3 rounded-xl transition-all duration-300 font-semibold shadow-lg hover:shadow-red-500/25 transform hover:scale-105 active:scale-95 overflow-hidden"
+                          >
+                            <div className="absolute inset-0 bg-gradient-to-r from-red-500 to-red-600 opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300"></div>
+                            <div className="relative flex items-center gap-2">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                              Cancel Order
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Futures Contracts Table */}
           <div className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-xl rounded-3xl border border-gray-700/50 p-8 shadow-2xl hover:border-gray-600/50 transition-all duration-500">
             <div className="flex items-center justify-between mb-8">
@@ -864,7 +1320,7 @@ const FuturesPage: React.FC = () => {
                           {selectedContract?.symbol === contract.symbol ? (
                             <div className="w-6 h-6 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center animate-pulse">
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l7-7 7 7" />
                               </svg>
                             </div>
                           ) : (
