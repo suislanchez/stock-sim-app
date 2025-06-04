@@ -128,13 +128,23 @@ const FuturesPage: React.FC = () => {
   const [orderType, setOrderType] = useState<'market' | 'limit'>('market');
   const [limitPrice, setLimitPrice] = useState<string>('');
   const [futuresPortfolio, setFuturesPortfolio] = useState<FuturesPortfolio[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      role: 'assistant',
+      content: "Hi! I'm your SimuTrader Futures CoPilot. I can help you understand futures contracts, analyze market data, and provide guidance on futures trading strategies.",
+      id: 'welcome'
+    }
+  ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [streamingMessage, setStreamingMessage] = useState('');
+  const [thinkingState, setThinkingState] = useState<'thinking' | 'reasoning' | null>(null);
   const [isCryptoMode, setIsCryptoMode] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  let messageIdCounter = 0;
 
   // Real futures data from Alpha Vantage API
   const [futuresData, setFuturesData] = useState<FuturesApiData[]>([]);
@@ -446,8 +456,58 @@ const FuturesPage: React.FC = () => {
     }
   };
 
+  // Function to generate unique message IDs
   const generateMessageId = () => {
-    return Date.now().toString() + Math.random().toString(36).substr(2, 9);
+    messageIdCounter += 1;
+    return `msg_${Date.now()}_${messageIdCounter}`;
+  };
+
+  // Function to scroll to bottom of messages
+  const scrollToBottom = () => {
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  };
+
+  // Utility function to simulate typing effect with streaming
+  const simulateTyping = (text: string, callback: (chunk: string) => void) => {
+    const words = text.split(' ');
+    let currentText = '';
+    let wordIndex = 0;
+
+    const typeNextWord = () => {
+      if (wordIndex < words.length) {
+        currentText += (wordIndex > 0 ? ' ' : '') + words[wordIndex];
+        callback(currentText);
+        wordIndex++;
+        setTimeout(typeNextWord, 50 + Math.random() * 100);
+      }
+    };
+    
+    typeNextWord();
+  };
+
+  // Intent classification function
+  const classifyIntent = (message: string): string => {
+    const lowerMessage = message.toLowerCase();
+    
+    if (lowerMessage.includes('risk') || lowerMessage.includes('danger') || lowerMessage.includes('lose')) {
+      return 'risk';
+    } else if (lowerMessage.includes('margin') || lowerMessage.includes('leverage')) {
+      return 'margin';
+    } else if (lowerMessage.includes('contract') || lowerMessage.includes('symbol') || lowerMessage.includes('what is')) {
+      return 'contracts';
+    } else if (lowerMessage.includes('time') || lowerMessage.includes('hours') || lowerMessage.includes('trade')) {
+      return 'trading_hours';
+    } else if (lowerMessage.includes('strategy') || lowerMessage.includes('profit') || lowerMessage.includes('how to')) {
+      return 'strategy';
+    } else if (lowerMessage.includes('my portfolio') || lowerMessage.includes('my position')) {
+      return 'portfolio';
+    } else if (lowerMessage.includes('price') || lowerMessage.includes('current') || lowerMessage.includes('market')) {
+      return 'market_data';
+    }
+    
+    return 'general';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -461,33 +521,216 @@ const FuturesPage: React.FC = () => {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const currentInput = input;
     setInput('');
     setIsLoading(true);
+    setThinkingState('thinking');
+    setStreamingMessage('');
+    
+    setTimeout(() => scrollToBottom(), 100);
 
-    // Enhanced AI responses for futures
-    setTimeout(() => {
-      let response = '';
-      
-      if (input.toLowerCase().includes('risk')) {
-        response = 'Futures trading involves leverage, which amplifies both potential gains and losses. Key risk management strategies include:\n• Position sizing based on account value\n• Stop-loss orders\n• Understanding margin requirements\n• Diversification across contract types\n• Monitor correlation between contracts';
-      } else if (input.toLowerCase().includes('margin')) {
-        response = 'Margin requirements vary by contract:\n• Index futures (ES, NQ): ~$12,000-15,000 per contract\n• Energy futures (CL): ~$4,000-6,000 per contract\n• Metal futures (GC): ~$8,000-12,000 per contract\n• Agricultural: ~$2,000-4,000 per contract\n\nRemember: margin is not the cost, it\'s a performance bond.';
-      } else if (input.toLowerCase().includes('contract') || input.toLowerCase().includes('symbol')) {
-        response = 'Popular futures contracts include:\n• Energy: Crude Oil (CL), Natural Gas (NG)\n• Indices: S&P 500 (ES), Nasdaq (NQ), Dow (YM)\n• Commodities: Gold (GC), Silver (SI), Copper (HG)\n• Currencies: Euro (6E), Yen (6J), Pound (6B)\n• Agriculture: Corn (ZC), Wheat (ZW), Soybeans (ZS)';
-      } else if (input.toLowerCase().includes('hour') || input.toLowerCase().includes('time')) {
-        response = 'Futures markets trade nearly 24/7:\n• Index futures: Sunday 6 PM - Friday 5 PM ET\n• Energy futures: Sunday 6 PM - Friday 5 PM ET\n• Metals: Sunday 6 PM - Friday 5 PM ET\n• Currencies: Sunday 5 PM - Friday 5 PM ET\n\nMost active during regular stock market hours (9:30 AM - 4 PM ET).';
-      } else {
-        response = 'Futures are standardized contracts to buy/sell an asset at a predetermined price on a future date. They offer leverage, liquidity, and are used for hedging or speculation.\n\nKey benefits:\n• High leverage (control large positions with less capital)\n• Deep liquidity in major contracts\n• Price discovery for underlying assets\n• Portfolio hedging capabilities';
+    // Classify user intent
+    const intent = classifyIntent(currentInput);
+    
+    // Enhanced AI responses based on intent and portfolio data
+    const generateResponse = (): string => {
+      switch (intent) {
+        case 'risk':
+          return `Futures trading involves substantial risk due to leverage. Here's what you need to know:
+
+📊 **Risk Management Essentials:**
+• Never risk more than 2-3% of your account on a single trade
+• Use stop-loss orders to limit downside
+• Understand that futures can move against you quickly
+• Monitor margin requirements - avoid margin calls
+
+⚡ **Leverage Impact:**
+• Small price moves = large profit/loss swings
+• A 1% price move can result in 10-20% portfolio impact
+• Always have a risk management plan before entering
+
+💡 **Your Current Exposure:** You have ${futuresPortfolio.length} active positions with total P&L of $${futuresPortfolio.reduce((sum, pos) => sum + pos.pnl, 0).toFixed(2)}`;
+
+        case 'margin':
+          const totalMargin = futuresPortfolio.reduce((sum, pos) => sum + pos.margin, 0);
+          return `Margin in futures is a performance bond, not a down payment:
+
+💰 **Current Margin Requirements:**
+• Your total margin used: $${totalMargin.toFixed(2)}
+• Available balance: $${profile?.balance.toFixed(2) || '0.00'}
+
+📋 **Typical Margin by Contract:**
+• S&P 500 E-mini (ES): ~$13,200 per contract
+• Crude Oil (CL): ~$5,400 per contract  
+• Gold (GC): ~$11,000 per contract
+• Nasdaq E-mini (NQ): ~$15,900 per contract
+
+⚠️ **Important:** Margin requirements can increase during volatile periods. Always maintain sufficient account balance above minimum requirements.`;
+
+        case 'contracts':
+          return `Popular futures contracts and their specifications:
+
+🏛️ **Index Futures:**
+• ES (S&P 500 E-mini): $50 x index value
+• NQ (Nasdaq E-mini): $20 x index value
+• YM (Dow E-mini): $5 x index value
+
+🛢️ **Energy Futures:**
+• CL (Crude Oil): 1,000 barrels
+• NG (Natural Gas): 10,000 MMBtu
+• RB (Gasoline): 42,000 gallons
+
+🥇 **Metals:**
+• GC (Gold): 100 troy ounces
+• SI (Silver): 5,000 troy ounces
+• HG (Copper): 25,000 pounds
+
+🌾 **Agriculture:**
+• ZC (Corn): 5,000 bushels
+• ZW (Wheat): 5,000 bushels
+• ZS (Soybeans): 5,000 bushels`;
+
+        case 'trading_hours':
+          return `Futures markets offer nearly 24-hour trading:
+
+🕐 **Electronic Trading Hours (ET):**
+• Index Futures: Sunday 6 PM - Friday 5 PM
+• Energy Futures: Sunday 6 PM - Friday 5 PM  
+• Metals: Sunday 6 PM - Friday 5 PM
+• Currencies: Sunday 5 PM - Friday 5 PM
+
+⏰ **Most Active Periods:**
+• Pre-market: 4:00-9:30 AM ET
+• Regular session: 9:30 AM-4:15 PM ET
+• After-hours: 4:15-6:00 PM ET
+
+💡 **Tip:** Liquidity is highest during regular U.S. market hours, resulting in tighter bid-ask spreads and better execution.`;
+
+        case 'strategy':
+          return `Futures trading strategies vary by market conditions and risk tolerance:
+
+📈 **Trend Following:**
+• Identify strong directional moves
+• Use moving averages for entry signals
+• Trail stops to protect profits
+
+⚖️ **Mean Reversion:**
+• Look for oversold/overbought conditions
+• Trade back toward average prices
+• Works well in range-bound markets
+
+🔄 **Spread Trading:**
+• Calendar spreads (same contract, different months)
+• Inter-commodity spreads (related markets)
+• Lower risk than outright positions
+
+🛡️ **Hedging:**
+• Protect existing portfolio positions
+• Use index futures to hedge stock portfolios
+• Currency futures for international exposure`;
+
+        case 'portfolio':
+          if (futuresPortfolio.length === 0) {
+            return `Your futures portfolio is currently empty. Ready to start trading?
+
+🚀 **Getting Started:**
+• Review available contracts above
+• Start with liquid contracts like ES or CL
+• Consider paper trading first
+• Set clear risk management rules
+
+💡 **Recommended for beginners:**
+• E-mini S&P 500 (ES) - most liquid
+• Crude Oil (CL) - high volatility, smaller contract
+• Gold (GC) - traditional hedge`;
+          } else {
+            const totalPnL = futuresPortfolio.reduce((sum, pos) => sum + pos.pnl, 0);
+            const totalMarginUsed = futuresPortfolio.reduce((sum, pos) => sum + pos.margin, 0);
+            
+            return `📊 **Your Futures Portfolio Analysis:**
+
+💰 **Performance Summary:**
+• Total Positions: ${futuresPortfolio.length}
+• Total P&L: ${totalPnL >= 0 ? '+' : ''}$${totalPnL.toFixed(2)}
+• Total Margin Used: $${totalMarginUsed.toFixed(2)}
+• Available Balance: $${profile?.balance.toFixed(2) || '0.00'}
+
+📈 **Position Breakdown:**
+${futuresPortfolio.map(pos => 
+  `• ${pos.symbol}: ${pos.contracts > 0 ? 'LONG' : 'SHORT'} ${Math.abs(pos.contracts)} contracts
+    Entry: $${pos.entryPrice.toFixed(2)} | Current: $${pos.currentPrice.toFixed(2)}
+    P&L: ${pos.pnl >= 0 ? '+' : ''}$${pos.pnl.toFixed(2)} (${pos.pnlPercent.toFixed(1)}%)`
+).join('\n')}
+
+⚠️ **Risk Check:** You're using ${((totalMarginUsed / (profile?.balance || 1)) * 100).toFixed(1)}% of your account as margin.`;
+          }
+
+        case 'market_data':
+          const latestData = futuresData.slice(0, 3);
+          return `📊 **Live Futures Market Data:**
+
+${latestData.map(contract => 
+  `🔹 **${contract.name} (${contract.symbol})**
+  Price: $${contract.price.toFixed(2)} ${contract.change >= 0 ? '📈' : '📉'}
+  Change: ${contract.change >= 0 ? '+' : ''}${contract.change.toFixed(2)} (${contract.changePercent.toFixed(2)}%)
+  Volume: ${contract.volume} | Open Interest: ${contract.openInterest}
+  Expiry: ${contract.expiry}`
+).join('\n\n')}
+
+🔄 **Market Status:** ${dataError ? 'Using sample data' : 'Live data active'}
+📅 **Last Updated:** ${new Date().toLocaleTimeString()}`;
+
+        default:
+          return `I'm your Futures CoPilot, specialized in helping you navigate the futures markets! 
+
+🎯 **I can help you with:**
+• Understanding futures contracts and specifications
+• Risk management and margin requirements  
+• Trading strategies and market analysis
+• Portfolio review and position management
+• Market hours and trading mechanics
+
+💡 **Try asking me:**
+• "What are the risks of futures trading?"
+• "How much margin do I need for ES contracts?"
+• "Analyze my current portfolio"
+• "What are the most liquid futures contracts?"
+• "When do futures markets trade?"
+
+📊 Currently tracking ${futuresData.length} futures contracts across energy, indices, commodities, and currencies.`;
       }
+    };
 
-      const assistantMessage: Message = {
-        role: 'assistant',
-        content: response,
-        id: generateMessageId()
-      };
-      setMessages(prev => [...prev, assistantMessage]);
-      setIsLoading(false);
-    }, 1000);
+    // Simulate thinking time
+    setTimeout(async () => {
+      setThinkingState('reasoning');
+      
+      setTimeout(async () => {
+        setThinkingState(null);
+        const response = generateResponse();
+        
+        // Create assistant message
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: response,
+          id: generateMessageId()
+        };
+
+        // Simulate streaming response
+        simulateTyping(response, (chunk) => {
+          setStreamingMessage(chunk);
+        });
+
+        // Add complete message after streaming
+        setTimeout(() => {
+          setMessages(prev => [...prev, assistantMessage]);
+          setStreamingMessage('');
+          setIsLoading(false);
+          setTimeout(() => scrollToBottom(), 100);
+        }, 50 * response.split(' ').length);
+        
+      }, 1000 + Math.random() * 1000);
+    }, 800 + Math.random() * 500);
   };
 
   const handleTrade = async (action: 'buy' | 'sell') => {
@@ -1502,25 +1745,27 @@ const FuturesPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Copilot Section - Same as Dashboard */}
+      {/* Enhanced Copilot with Portfolio Context */}
       <div className="fixed right-0 top-0 w-[500px] h-screen bg-gradient-to-br from-[#181c2a] via-[#23294a] to-[#1a1d2b] shadow-xl flex flex-col border-l border-gray-700 overflow-y-auto">
         <div className="flex-1 flex flex-col justify-start items-center pt-50">
           <div className="w-full flex flex-col items-center">
-            {/* Title */}
             <h1 className="text-6xl font-extrabold bg-gradient-to-r from-green-400 via-blue-400 to-purple-400 bg-clip-text text-transparent mb-6 text-center">CoPilot</h1>
-            <p className="text-lg text-gray-200 mb-10 text-center font-medium">Futures trading guidance and analysis</p>
+            <p className="text-lg text-gray-200 mb-10 text-center font-medium">Futures trading guidance</p>
             
             {/* Show suggestions when no messages */}
             {messages.length === 0 ? (
               <div className="w-full max-w-md px-4 space-y-6 mb-8">
-                {/* Input Form */}
                 <form onSubmit={handleSubmit} className="w-full mb-6">
                   <div className="relative">
                     <textarea
                       ref={textareaRef}
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
-                      placeholder="Ask about futures trading..."
+                      onInput={(e) => {
+                        e.currentTarget.style.height = 'auto';
+                        e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
+                      }}
+                      placeholder="Ask about futures trading, risk management, contracts..."
                       className="w-full bg-[#23294a] text-white rounded-xl px-6 py-4 pr-12 focus:outline-none focus:ring-2 focus:ring-green-400 text-lg shadow-lg placeholder-shine resize-none overflow-hidden"
                     />
                     <button 
@@ -1536,35 +1781,62 @@ const FuturesPage: React.FC = () => {
                   </div>
                 </form>
 
-                {/* Suggestion Buttons */}
                 <div className="w-full grid grid-cols-2 gap-4 mt-6 mb-6">
                   <button
-                    onClick={() => setInput("What are the margin requirements for ES futures?")}
+                    onClick={() => {
+                      setInput("What are the margin requirements for my futures portfolio?");
+                      setTimeout(() => {
+                        const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+                        const form = document.querySelector('form');
+                        if (form) form.dispatchEvent(submitEvent);
+                      }, 0);
+                    }}
                     className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-blue-500 hover:border-blue-400 text-left shadow-lg"
                   >
                     <div className="font-semibold text-blue-400 mb-2">Margin & Risk</div>
-                    <div className="text-xs text-gray-300">What are the margin requirements for ES futures?</div>
+                    <div className="text-xs text-gray-300">Check margin requirements</div>
                   </button>
                   <button
-                    onClick={() => setInput("Explain the difference between commodity and index futures")}
+                    onClick={() => {
+                      setInput("Analyze my current futures positions and P&L");
+                      setTimeout(() => {
+                        const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+                        const form = document.querySelector('form');
+                        if (form) form.dispatchEvent(submitEvent);
+                      }, 0);
+                    }}
                     className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-green-500 hover:border-green-400 text-left shadow-lg"
                   >
-                    <div className="font-semibold text-green-400 mb-2">Contract Types</div>
-                    <div className="text-xs text-gray-300">Explain the difference between commodity and index futures</div>
+                    <div className="font-semibold text-green-400 mb-2">Portfolio Analysis</div>
+                    <div className="text-xs text-gray-300">Review my positions</div>
                   </button>
                   <button
-                    onClick={() => setInput("How do I manage risk when trading crude oil futures?")}
+                    onClick={() => {
+                      setInput("Help me understand futures contract expiration and rollover");
+                      setTimeout(() => {
+                        const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+                        const form = document.querySelector('form');
+                        if (form) form.dispatchEvent(submitEvent);
+                      }, 0);
+                    }}
                     className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-purple-500 hover:border-purple-400 text-left shadow-lg"
                   >
-                    <div className="font-semibold text-purple-400 mb-2">Risk Management</div>
-                    <div className="text-xs text-gray-300">How do I manage risk when trading crude oil futures?</div>
+                    <div className="font-semibold text-purple-400 mb-2">Contract Expiration</div>
+                    <div className="text-xs text-gray-300">Expiry and rollover strategy</div>
                   </button>
                   <button
-                    onClick={() => setInput("What factors affect futures prices?")}
+                    onClick={() => {
+                      setInput("Show me current market data and trading opportunities");
+                      setTimeout(() => {
+                        const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+                        const form = document.querySelector('form');
+                        if (form) form.dispatchEvent(submitEvent);
+                      }, 0);
+                    }}
                     className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-yellow-500 hover:border-yellow-400 text-left shadow-lg"
                   >
-                    <div className="font-semibold text-yellow-400 mb-2">Price Factors</div>
-                    <div className="text-xs text-gray-300">What factors affect futures prices?</div>
+                    <div className="font-semibold text-yellow-400 mb-2">Market Data</div>
+                    <div className="text-xs text-gray-300">Live prices and opportunities</div>
                   </button>
                 </div>
               </div>
@@ -1576,7 +1848,22 @@ const FuturesPage: React.FC = () => {
                     <div 
                       key={message.id} 
                       className={`${message.role === 'user' ? 'ml-auto' : 'mr-auto'} max-w-[80%] group animate-fade-in`}
+                      style={{ animation: 'fadeIn 0.3s ease-out' }}
                     >
+                      {/* Toolbar above assistant messages */}
+                      {message.role === 'assistant' && (
+                        <div className="flex space-x-1 mb-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => navigator.clipboard.writeText(message.content)}
+                            className="p-1 rounded bg-gray-800 hover:bg-gray-700"
+                            aria-label="Copy message"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                            </svg>
+                          </button>
+                        </div>
+                      )}
                       <div className={`rounded-xl p-4 ${
                         message.role === 'user' 
                           ? 'bg-gray-700 text-white' 
@@ -1590,29 +1877,51 @@ const FuturesPage: React.FC = () => {
                       </div>
                     </div>
                   ))}
-                  {isLoading && (
-                    <div className="mr-auto max-w-[80%]">
-                      <div className="bg-[#23294a] rounded-xl p-4">
-                        <div className="flex space-x-1">
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                  {streamingMessage && (
+                    <div className="mr-auto max-w-[80%] animate-fade-in" style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                      <div className="bg-[#23294a] rounded-xl p-4 text-white">
+                        <div className="prose prose-invert max-w-none break-words whitespace-pre-wrap">
+                          {streamingMessage.split('\n').map((line, i) => (
+                            <p key={i} className="mb-2 last:mb-0">{line}</p>
+                          ))}
                         </div>
                       </div>
                     </div>
                   )}
+                  {(isLoading && !streamingMessage) || thinkingState ? (
+                    <div className="mr-auto max-w-[80%]">
+                      <div className="bg-[#23294a] rounded-xl p-4 text-white">
+                        <div className="flex items-center space-x-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          <span className="animated-thinking-text">
+                            {thinkingState === 'thinking' && 'Analyzing your futures portfolio...'}
+                            {thinkingState === 'reasoning' && 'Calculating futures strategy...'}
+                            {!thinkingState && 'Loading...'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div ref={messagesEndRef} />
+                  )}
+                  <div ref={messagesEndRef} />
                 </div>
 
-                {/* Chat Input */}
-                <form onSubmit={handleSubmit} className="w-full max-w-md px-4 mb-4">
+                {/* Input Form - shown at bottom when there are messages */}
+                <form onSubmit={handleSubmit} className="w-full max-w-md px-4 mb-8">
                   <div className="relative">
                     <textarea
                       ref={textareaRef}
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
-                      placeholder="Ask about futures..."
-                      className="w-full bg-[#23294a] text-white rounded-xl px-6 py-4 pr-12 focus:outline-none focus:ring-2 focus:ring-green-400 text-lg shadow-lg resize-none overflow-hidden"
+                      onInput={(e) => {
+                        e.currentTarget.style.height = 'auto';
+                        e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
+                      }}
                       rows={1}
+                      placeholder="Ask about futures..."
+                      className="w-full bg-[#23294a] text-white rounded-xl px-6 py-4 pr-12 focus:outline-none focus:ring-2 focus:ring-green-400 text-lg shadow-lg placeholder-shine resize-none overflow-hidden"
+                      disabled={isLoading}
                     />
                     <button 
                       type="submit"
@@ -1626,6 +1935,79 @@ const FuturesPage: React.FC = () => {
                     </button>
                   </div>
                 </form>
+
+                {/* Suggestion Buttons 2x2 Grid - only when messages.length === 1 */}
+                {messages.length === 1 && (
+                  <div className="w-full max-w-md px-4 mb-8">
+                    <div className="grid grid-cols-2 gap-4">
+                      <button
+                        onClick={() => {
+                          const message = "What's the optimal contract size for my account balance?";
+                          setInput(message);
+                          setTimeout(() => {
+                            const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+                            const form = document.querySelector('form');
+                            if (form) form.dispatchEvent(submitEvent);
+                          }, 0);
+                        }}
+                        className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-green-400/50 hover:border-green-400 text-left shadow-lg"
+                      >
+                        <div className="font-semibold text-green-400 mb-2">Position Sizing</div>
+                        <div className="text-xs text-gray-300">Optimal contract sizing</div>
+                      </button>
+                      <button
+                        onClick={() => {
+                          const message = "How should I manage risk with my current futures positions?";
+                          setInput(message);
+                          setTimeout(() => {
+                            const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+                            const form = document.querySelector('form');
+                            if (form) form.dispatchEvent(submitEvent);
+                          }, 0);
+                        }}
+                        className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-yellow-400/50 hover:border-yellow-400 text-left shadow-lg"
+                      >
+                        <div className="font-semibold text-yellow-400 mb-2">Risk Management</div>
+                        <div className="text-xs text-gray-300">Portfolio risk strategies</div>
+                      </button>
+                      <button
+                        onClick={() => {
+                          const message = "Which futures contracts have the best liquidity right now?";
+                          setInput(message);
+                          setTimeout(() => {
+                            const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+                            const form = document.querySelector('form');
+                            if (form) form.dispatchEvent(submitEvent);
+                          }, 0);
+                        }}
+                        className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-blue-400/50 hover:border-blue-400 text-left shadow-lg"
+                      >
+                        <div className="font-semibold text-blue-400 mb-2">Market Liquidity</div>
+                        <div className="text-xs text-gray-300">Best liquid contracts</div>
+                      </button>
+                      <button
+                        onClick={() => {
+                          const message = "How can I hedge my futures positions effectively?";
+                          setInput(message);
+                          setTimeout(() => {
+                            const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+                            const form = document.querySelector('form');
+                            if (form) form.dispatchEvent(submitEvent);
+                          }, 0);
+                        }}
+                        className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-purple-400/50 hover:border-purple-400 text-left shadow-lg"
+                      >
+                        <div className="font-semibold text-purple-400 mb-2">Hedging Strategy</div>
+                        <div className="text-xs text-gray-300">Portfolio hedging tactics</div>
+                      </button>
+                    </div>
+                    <div className="mt-6 flex justify-center">
+                      <button className="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white font-semibold hover:opacity-90 transition-opacity duration-200">
+                        See More Futures Strategies
+                      </button>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>

@@ -2,16 +2,13 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
-import { fetchStock } from "../../lib/fetchStock";
+import { fetchStock, fetchMultipleStocks } from "../../lib/fetchStock";
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  ReferenceLine,
   Area,
   AreaChart,
   PieChart,
@@ -98,11 +95,6 @@ interface WatchlistItem {
   added_at: string;
 }
 
-// Add this near the top of the file with other interfaces
-interface LogoData {
-  url: string;
-  symbol: string;
-}
 
 // Add logo mapping dictionary
 const logoMapping: Record<string, string> = {
@@ -1948,32 +1940,55 @@ export default function DashboardPage() {
 
         if (error) throw error;
 
-        // Fetch current prices for all portfolio items
-        const portfolioWithPrices = await Promise.all(
-          portfolioData.map(async (item) => {
-            const stockData = await fetchStock(item.symbol);
-            const currentPrice = stockData.price;
-            const totalValue = currentPrice * item.shares;
-            const gainLoss = totalValue - (item.average_price * item.shares);
-            const gainLossPercentage = (gainLoss / (item.average_price * item.shares)) * 100;
+        // Extract all symbols for bulk fetching
+        const symbols = portfolioData.map(item => item.symbol);
+        
+        if (symbols.length === 0) {
+          setPortfolio([]);
+          setPortfolioHistory([]);
+          setPortfolioLoading(false);
+          return;
+        }
 
+        console.log(`Fetching data for ${symbols.length} portfolio stocks using bulk API`);
+        
+        // Use bulk fetch for current prices
+        const bulkStockData = await fetchMultipleStocks(symbols);
+
+        const portfolioWithPrices = portfolioData.map((item) => {
+          const stockData = bulkStockData[item.symbol];
+          if (!stockData) {
+            console.warn(`No data received for ${item.symbol}`);
             return {
               ...item,
-              current_price: currentPrice,
-              total_value: totalValue,
-              gain_loss: gainLoss,
-              gain_loss_percentage: gainLossPercentage
+              current_price: 0,
+              total_value: 0,
+              gain_loss: 0,
+              gain_loss_percentage: 0
             };
-          })
-        );
+          }
+
+          const currentPrice = stockData.price;
+          const totalValue = currentPrice * item.shares;
+          const gainLoss = totalValue - (item.average_price * item.shares);
+          const gainLossPercentage = (gainLoss / (item.average_price * item.shares)) * 100;
+
+          return {
+            ...item,
+            current_price: currentPrice,
+            total_value: totalValue,
+            gain_loss: gainLoss,
+            gain_loss_percentage: gainLossPercentage
+          };
+        });
 
         setPortfolio(portfolioWithPrices);
 
-        // Calculate historical portfolio values
+        // Calculate historical portfolio values - use individual calls for history since bulk doesn't provide it
         const historicalData = await Promise.all(
           portfolioData.map(async (item) => {
             const stockData = await fetchStock(item.symbol, selectedTimeframe);
-            return stockData.history.map(historyItem => ({
+            return stockData.history.map((historyItem: any) => ({
               date: historyItem.timestamp,
               value: historyItem.price * item.shares
             }));
@@ -1981,14 +1996,17 @@ export default function DashboardPage() {
         );
 
         // Combine historical data from all stocks
-        const combinedHistory = historicalData[0].map((_, index) => {
-          const date = historicalData[0][index].date;
-          const totalValue = historicalData.reduce((sum, stockHistory) => 
-            sum + (stockHistory[index]?.value || 0), 0);
-          return { date, value: totalValue };
-        });
-
-        setPortfolioHistory(combinedHistory);
+        if (historicalData.length > 0 && historicalData[0].length > 0) {
+          const combinedHistory = historicalData[0].map((_, index: number) => {
+            const date = historicalData[0][index].date;
+            const totalValue = historicalData.reduce((sum, stockHistory) => 
+              sum + (stockHistory[index]?.value || 0), 0);
+            return { date, value: totalValue };
+          });
+          setPortfolioHistory(combinedHistory);
+        } else {
+          setPortfolioHistory([]);
+        }
       } catch (err) {
         console.error("Error fetching portfolio:", err);
       } finally {
@@ -3016,7 +3034,7 @@ export default function DashboardPage() {
         console.log('Profile updated:', updatedProfile);
       }
       
-      // Refresh portfolio with current prices (full calculation like the main useEffect)
+      // Refresh portfolio with current prices using bulk API
       setPortfolioLoading(true);
       const { data: portfolioData, error: portfolioError } = await supabase
         .from('portfolio')
@@ -3029,46 +3047,50 @@ export default function DashboardPage() {
       }
       
       if (portfolioData && portfolioData.length > 0) {
-        // Fetch current prices for all portfolio items (same logic as main useEffect)
-        const portfolioWithPrices = await Promise.all(
-          portfolioData.map(async (item) => {
-            try {
-              const stockData = await fetchStock(item.symbol);
-              const currentPrice = stockData.price;
-              const totalValue = currentPrice * item.shares;
-              const gainLoss = totalValue - (item.average_price * item.shares);
-              const gainLossPercentage = (gainLoss / (item.average_price * item.shares)) * 100;
+        // Extract all symbols for bulk fetching
+        const symbols = portfolioData.map(item => item.symbol);
+        console.log(`Refreshing portfolio data for ${symbols.length} stocks using bulk API`);
+        
+        // Use bulk fetch for current prices
+        const bulkStockData = await fetchMultipleStocks(symbols);
 
-              return {
-                ...item,
-                current_price: currentPrice,
-                total_value: totalValue,
-                gain_loss: gainLoss,
-                gain_loss_percentage: gainLossPercentage
-              };
-            } catch (error) {
-              console.error(`Error fetching data for ${item.symbol}:`, error);
-              return {
-                ...item,
-                current_price: 0,
-                total_value: 0,
-                gain_loss: 0,
-                gain_loss_percentage: 0
-              };
-            }
-          })
-        );
+        const portfolioWithPrices = portfolioData.map((item) => {
+          const stockData = bulkStockData[item.symbol];
+          if (!stockData) {
+            console.warn(`No refresh data received for ${item.symbol}`);
+            return {
+              ...item,
+              current_price: 0,
+              total_value: 0,
+              gain_loss: 0,
+              gain_loss_percentage: 0
+            };
+          }
+
+          const currentPrice = stockData.price;
+          const totalValue = currentPrice * item.shares;
+          const gainLoss = totalValue - (item.average_price * item.shares);
+          const gainLossPercentage = (gainLoss / (item.average_price * item.shares)) * 100;
+
+          return {
+            ...item,
+            current_price: currentPrice,
+            total_value: totalValue,
+            gain_loss: gainLoss,
+            gain_loss_percentage: gainLossPercentage
+          };
+        });
 
         setPortfolio(portfolioWithPrices);
         console.log('Portfolio updated with prices:', portfolioWithPrices);
 
-        // Calculate historical portfolio values
+        // Calculate historical portfolio values - only if needed
         try {
           const historicalData = await Promise.all(
             portfolioData.map(async (item) => {
               try {
                 const stockData = await fetchStock(item.symbol, selectedTimeframe);
-                return stockData.history.map(historyItem => ({
+                return stockData.history.map((historyItem: any) => ({
                   date: historyItem.timestamp,
                   value: historyItem.price * item.shares
                 }));
@@ -3081,7 +3103,7 @@ export default function DashboardPage() {
 
           // Combine historical data from all stocks
           if (historicalData.length > 0 && historicalData[0].length > 0) {
-            const combinedHistory = historicalData[0].map((_, index) => {
+            const combinedHistory = historicalData[0].map((_, index: number) => {
               const date = historicalData[0][index].date;
               const totalValue = historicalData.reduce((sum, stockHistory) => 
                 sum + (stockHistory[index]?.value || 0), 0);
@@ -3107,7 +3129,7 @@ export default function DashboardPage() {
       }
       
       setPortfolioLoading(false);
-      console.log('Portfolio data refresh completed');
+      console.log('Portfolio data refresh completed using bulk API');
     } catch (error) {
       console.error('Error refreshing portfolio data:', error);
       setPortfolioLoading(false);
@@ -3472,6 +3494,80 @@ export default function DashboardPage() {
     } finally {
       setIsLoading(false);
       setThinkingState(null);
+    }
+  };
+
+  // New utility function to update portfolio with bulk fetching
+  const updatePortfolioWithBulkFetch = async (portfolioData: any[]) => {
+    if (!portfolioData || portfolioData.length === 0) return [];
+
+    try {
+      // Extract symbols for bulk fetch
+      const symbols = portfolioData.map(item => item.symbol);
+      console.log(`Using bulk API to fetch ${symbols.length} portfolio stocks`);
+      
+      // Import bulk function dynamically to avoid import issues
+      const { fetchMultipleStocks } = await import("../../lib/fetchStock");
+      const bulkStockData = await fetchMultipleStocks(symbols);
+
+      return portfolioData.map((item) => {
+        const stockData = bulkStockData[item.symbol];
+        if (!stockData) {
+          console.warn(`No bulk data received for ${item.symbol}`);
+          return {
+            ...item,
+            current_price: 0,
+            total_value: 0,
+            gain_loss: 0,
+            gain_loss_percentage: 0
+          };
+        }
+
+        const currentPrice = stockData.price;
+        const totalValue = currentPrice * item.shares;
+        const gainLoss = totalValue - (item.average_price * item.shares);
+        const gainLossPercentage = (gainLoss / (item.average_price * item.shares)) * 100;
+
+        return {
+          ...item,
+          current_price: currentPrice,
+          total_value: totalValue,
+          gain_loss: gainLoss,
+          gain_loss_percentage: gainLossPercentage
+        };
+      });
+    } catch (error) {
+      console.error('Error in bulk fetch, falling back to individual calls:', error);
+      
+      // Fallback to individual calls
+      return await Promise.all(
+        portfolioData.map(async (item) => {
+          try {
+            const stockData = await fetchStock(item.symbol);
+            const currentPrice = stockData.price;
+            const totalValue = currentPrice * item.shares;
+            const gainLoss = totalValue - (item.average_price * item.shares);
+            const gainLossPercentage = (gainLoss / (item.average_price * item.shares)) * 100;
+
+            return {
+              ...item,
+              current_price: currentPrice,
+              total_value: totalValue,
+              gain_loss: gainLoss,
+              gain_loss_percentage: gainLossPercentage
+            };
+          } catch (error) {
+            console.error(`Error fetching data for ${item.symbol}:`, error);
+            return {
+              ...item,
+              current_price: 0,
+              total_value: 0,
+              gain_loss: 0,
+              gain_loss_percentage: 0
+            };
+          }
+        })
+      );
     }
   };
 

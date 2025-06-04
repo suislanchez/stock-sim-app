@@ -38,7 +38,7 @@ export default function AboutPage() {
             </div>
           </div>
           <p className="text-gray-400 mb-4">
-            Hi! I'm Luis, the creator of StockSim. I built this platform to help people learn about investing and trading in a fun, social, and risk-free way. If you have feedback or want to connect, feel free to reach out!
+            Hi! I&apos;m Luis, the creator of StockSim. I built this platform to help people learn about investing and trading in a fun, social, and risk-free way. If you have feedback or want to connect, feel free to reach out!
           </p>
           <div className="flex gap-4">
             <a href="#" className="text-green-400 hover:underline">LinkedIn</a>

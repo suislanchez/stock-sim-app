@@ -5,6 +5,37 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+interface PortfolioItem {
+  symbol: string;
+  shares: number;
+  average_price: number;
+  total_value: number;
+  gain_loss_percentage?: number;
+}
+
+interface WatchlistItem {
+  symbol: string;
+}
+
+interface PortfolioMetrics {
+  totalValue: number;
+  totalReturn: number;
+  dailyReturn: number;
+}
+
+interface MarketStatus {
+  isOpen: boolean;
+}
+
+interface ChatContext {
+  portfolio?: PortfolioItem[];
+  watchlist?: WatchlistItem[];
+  selectedStock?: string;
+  portfolioMetrics?: PortfolioMetrics;
+  marketStatus?: MarketStatus;
+  isCryptoMode?: boolean;
+}
+
 // Simple function to parse buy requests
 function parseBuyRequest(message: string) {
   const buyPatterns = [
@@ -50,7 +81,7 @@ function parseSellRequest(message: string) {
 
 export async function POST(req: Request) {
   try {
-    const { message, context } = await req.json();
+    const { message, context }: { message: string; context: ChatContext } = await req.json();
 
     // Check for buy requests
     const buyRequest = parseBuyRequest(message);
@@ -70,7 +101,7 @@ export async function POST(req: Request) {
     const sellRequest = parseSellRequest(message);
     if (sellRequest) {
       // Check if user owns the stock
-      const portfolioItem = context.portfolio?.find((item: any) => item.symbol === sellRequest.symbol);
+      const portfolioItem = context.portfolio?.find((item: PortfolioItem) => item.symbol === sellRequest.symbol);
       if (!portfolioItem) {
         return NextResponse.json({
           message: `You don't own any shares of ${sellRequest.symbol}.`,
@@ -96,14 +127,14 @@ export async function POST(req: Request) {
 
     // Format portfolio data for better context
     const portfolioInfo = context.portfolio && context.portfolio.length > 0 
-      ? context.portfolio.map((item: any) => 
+      ? context.portfolio.map((item: PortfolioItem) => 
           `${item.symbol}: ${item.shares} shares, avg price $${item.average_price}, current value $${item.total_value}, return ${item.gain_loss_percentage?.toFixed(2)}%`
         ).join('\n      - ')
       : 'No stocks in portfolio';
 
     // Format watchlist data
     const watchlistInfo = context.watchlist && context.watchlist.length > 0
-      ? context.watchlist.map((item: any) => item.symbol).join(', ')
+      ? context.watchlist.map((item: WatchlistItem) => item.symbol).join(', ')
       : 'Empty watchlist';
 
     // For regular chat, use OpenAI directly

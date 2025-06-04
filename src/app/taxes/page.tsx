@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { fetchStock } from '@/lib/fetchStock';
+import { fetchStock, type StockResponse } from '@/lib/fetchStock';
 
 // Custom CSS for animations (same as futures page)
 const customStyles = `
@@ -166,6 +166,95 @@ interface Message {
   content: string;
   id: string;
 }
+
+// Function to get stock color for portfolio positions
+const getStockColor = (symbol: string, portfolio: RealPortfolioItem[]) => {
+  const position = portfolio.find(p => p.symbol === symbol);
+  if (!position) return 'bg-gray-600 hover:bg-gray-500 text-white';
+  
+  const gain = position.unrealized_gain_loss || 0;
+  if (gain > 0) return 'bg-green-600 hover:bg-green-500 text-white';
+  if (gain < 0) return 'bg-red-600 hover:bg-red-500 text-white';
+  return 'bg-yellow-600 hover:bg-yellow-500 text-white';
+};
+
+// Function to format message content with colored ticker bubbles
+const formatMessageContent = (content: string, portfolio: RealPortfolioItem[], onSelectStock: (symbol: string) => void) => {
+  if (!content) return null;
+
+  // Pattern to match stock symbols (2-5 uppercase letters, possibly followed by numbers)
+  const stockPattern = /\b[A-Z]{2,5}[0-9]*\b/g;
+  const parts = content.split(stockPattern);
+  const matches = content.match(stockPattern) || [];
+
+  return (
+    <div className="whitespace-pre-wrap">
+      {parts.map((part, index) => (
+        <React.Fragment key={index}>
+          {part}
+          {matches[index] && (
+            <button
+              onClick={() => onSelectStock(matches[index])}
+              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mx-1 transition-all duration-200 ${getStockColor(matches[index], portfolio)}`}
+            >
+              {matches[index]}
+            </button>
+          )}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+};
+
+// Bulk fetch stock quotes function
+const bulkFetchStockQuotes = async (symbols: string[]): Promise<{[key: string]: number}> => {
+  if (symbols.length === 0) return {};
+  
+  try {
+    const prices: {[key: string]: number} = {};
+    
+    // Batch fetch in groups of 5 to avoid rate limits
+    const batchSize = 5;
+    for (let i = 0; i < symbols.length; i += batchSize) {
+      const batch = symbols.slice(i, i + batchSize);
+      
+      const batchPromises = batch.map(async (symbol) => {
+        try {
+          const response = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${process.env.NEXT_PUBLIC_ALPHA_VANTAGE_API_KEY}`);
+          const data = await response.json();
+          
+          if (data['Global Quote'] && data['Global Quote']['05. price']) {
+            return {
+              symbol,
+              price: parseFloat(data['Global Quote']['05. price'])
+            };
+          }
+          return null;
+        } catch (error) {
+          console.error(`Error fetching ${symbol}:`, error);
+          return null;
+        }
+      });
+      
+      const batchResults = await Promise.all(batchPromises);
+      batchResults.forEach(result => {
+        if (result) {
+          prices[result.symbol] = result.price;
+        }
+      });
+      
+      // Small delay between batches to respect rate limits
+      if (i + batchSize < symbols.length) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+    }
+    
+    return prices;
+  } catch (error) {
+    console.error('Error in bulk fetch:', error);
+    return {};
+  }
+};
 
 // InfoBubble component for explanations
 const InfoBubble = ({ title, content }: { title: string; content: string }) => {
@@ -376,10 +465,403 @@ const TaxesPage: React.FC = () => {
   const [taxLots, setTaxLots] = useState<TaxLot[]>([]);
   
   // Copilot state
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      role: 'assistant',
+      content: 'Hi! I\'m your SimuTrader Tax CoPilot. I can help you analyze your portfolio\'s tax implications and provide tax planning guidance.',
+      id: 'welcome'
+    }
+  ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [streamingMessage, setStreamingMessage] = useState('');
+  const [thinkingState, setThinkingState] = useState<'thinking' | 'reasoning' | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  let messageIdCounter = 0;
+
+  // Function to generate unique message IDs
+  const generateMessageId = () => {
+    messageIdCounter += 1;
+    return `${Date.now()}_${messageIdCounter}_${Math.random().toString(36).substr(2, 9)}`;
+  };
+
+  // Add this function to scroll to bottom of messages
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, streamingMessage]);
+
+  // Add function to handle stock selection
+  const handleSelectStock = (symbol: string) => {
+    setInput(`Tell me about ${symbol} in my portfolio and its tax implications`);
+  };
+
+  // Enhanced submit handler with streaming and intent parsing
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
+
+    const userMessage = input.trim();
+    setInput('');
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
+    const userMessageId = generateMessageId();
+    setMessages(prev => [...prev, { role: 'user', content: userMessage, id: userMessageId }]);
+    setIsLoading(true);
+    setStreamingMessage('');
+    setThinkingState('thinking');
+
+    try {
+      // Fetch current stock prices for portfolio
+      const portfolioSymbols = realPortfolio.map(p => p.symbol);
+      const currentPrices = await bulkFetchStockQuotes(portfolioSymbols);
+      
+      // Update portfolio with current prices and recalculate metrics
+      const updatedPortfolio = realPortfolio.map(position => {
+        const currentPrice = currentPrices[position.symbol] || position.current_price || position.average_price;
+        const unrealizedGL = (currentPrice - position.average_price) * position.shares;
+        
+        return {
+          ...position,
+          current_price: currentPrice,
+          unrealized_gain_loss: unrealizedGL
+        };
+      });
+
+      // Simple context like dashboard - send updated portfolio data
+      const context = {
+        portfolio: updatedPortfolio, // Send updated portfolio with current prices
+        taxCalculation,
+        income,
+        filingStatus,
+        userTaxBracket: getTaxBracket(income, filingStatus),
+        userCapitalGainsBracket: getLongTermCapitalGainsBracket(income, filingStatus),
+        portfolioLoading,
+        userId: profile?.id,
+        pageType: 'taxes'
+      };
+
+      setThinkingState('reasoning');
+
+      // Make the API call with the updated context
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: userMessage,
+          context
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get response');
+      }
+
+      // Handle streaming response
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No reader available');
+
+      const decoder = new TextDecoder();
+      let accumulatedMessage = '';
+      setThinkingState(null);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n').filter(line => line.trim() !== '');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') continue;
+
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices[0]?.delta?.content || '';
+              accumulatedMessage += content;
+              setStreamingMessage(accumulatedMessage);
+            } catch (e) {
+              console.error('Error parsing streaming response:', e);
+            }
+          }
+        }
+      }
+
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: accumulatedMessage,
+        id: generateMessageId()
+      }]);
+      setStreamingMessage('');
+
+    } catch (error) {
+      console.error('Error:', error);
+      setThinkingState(null);
+      
+      // Enhanced fallback responses using actual realPortfolio data
+      let response = '';
+      
+      if (userMessage.toLowerCase().includes('wash sale')) {
+        const violations = taxCalculation.washSaleViolations;
+        if (violations.length > 0) {
+          response = `**Wash Sale Alert - Immediate Action Required:**\n\n`;
+          response += `I've identified ${violations.length} wash sale violation(s) in your ${realPortfolio.length} holdings that are costing you money:\n\n`;
+          violations.forEach((violation, i) => {
+            response += `${i + 1}. **${violation.symbol}** - You're losing $${violation.lossAmount.toFixed(2)} in tax deductions\n`;
+            response += `   • Disallowed loss: $${violation.lossAmount.toFixed(2)}\n`;
+            response += `   • Your new cost basis: $${violation.adjustedBasis.toFixed(2)}\n\n`;
+          });
+          response += `**Here's what you need to do:**\n`;
+          response += `• You've lost $${violations.reduce((sum, v) => sum + v.lossAmount, 0).toFixed(2)} in immediate tax deductions\n`;
+          response += `• These losses are now added to your repurchased shares' cost basis\n`;
+          response += `• **Action**: Wait 31+ days before buying back to avoid future violations\n`;
+          response += `• **Strategy**: Use similar ETFs during waiting periods to maintain exposure`;
+        } else {
+          response = `**Excellent! Your portfolio is wash sale compliant.**\n\n`;
+          response += `I've analyzed your ${realPortfolio.length} holdings and found zero wash sale violations. You're maximizing your tax efficiency.\n\n`;
+          response += `**Your Current Status:**\n`;
+          response += `• ${realPortfolio.filter(p => p.is_long_term).length} long-term positions (tax-advantaged)\n`;
+          response += `• ${realPortfolio.filter(p => !p.is_long_term).length} short-term positions\n`;
+          response += `• Total unrealized G/L: $${realPortfolio.reduce((sum, p) => sum + (p.unrealized_gain_loss || 0), 0).toFixed(2)}\n\n`;
+          response += `**Keep this compliance by:**\n`;
+          response += `• Waiting 31+ days between selling and repurchasing identical securities\n`;
+          response += `• Using similar but not identical ETFs during waiting periods\n`;
+          response += `• Setting calendar reminders for 31-day periods after losses`;
+        }
+      } else if (userMessage.toLowerCase().includes('portfolio') || userMessage.toLowerCase().includes('holdings')) {
+        if (realPortfolio.length > 0) {
+          response = `**Complete Tax Analysis of Your ${realPortfolio.length} Holdings:**\n\n`;
+          
+          // Portfolio overview using realPortfolio with current prices
+          const totalValue = realPortfolio.reduce((sum, p) => sum + ((p.current_price || 0) * p.shares), 0);
+          const totalUnrealized = realPortfolio.reduce((sum, p) => sum + (p.unrealized_gain_loss || 0), 0);
+          const totalExpectedTax = realPortfolio.reduce((sum, p) => sum + calculateExpectedTax(p), 0);
+          
+          response += `**Portfolio Value & Tax Impact:**\n`;
+          response += `• Total Portfolio Value: $${totalValue.toFixed(2)}\n`;
+          response += `• Unrealized Gains/Losses: $${totalUnrealized.toFixed(2)}\n`;
+          response += `• Tax Liability if Sold Today: $${totalExpectedTax.toFixed(2)}\n`;
+          response += `• Your Net After-Tax Value: $${(totalUnrealized - totalExpectedTax).toFixed(2)}\n\n`;
+          
+          response += `**Tax-Efficient Breakdown:**\n`;
+          response += `• ${realPortfolio.filter(p => p.is_long_term).length} positions qualify for long-term rates (big tax savings!)\n`;
+          response += `• ${realPortfolio.filter(p => !p.is_long_term).length} positions still at ordinary income rates\n`;
+          response += `• ${realPortfolio.filter(p => (p.unrealized_gain_loss || 0) > 0).length} positions with gains (harvest carefully)\n`;
+          response += `• ${realPortfolio.filter(p => (p.unrealized_gain_loss || 0) < 0).length} positions with losses (harvest for tax benefits)\n\n`;
+          
+          response += `**Your Most Valuable Holdings & Tax Strategy:**\n`;
+          const topHoldings = [...realPortfolio]
+            .sort((a, b) => ((b.current_price || 0) * b.shares) - ((a.current_price || 0) * a.shares))
+            .slice(0, 5);
+          
+          topHoldings.forEach((position, i) => {
+            const marketValue = (position.current_price || 0) * position.shares;
+            const unrealizedGL = position.unrealized_gain_loss || 0;
+            const expectedTax = calculateExpectedTax(position);
+            response += `${i + 1}. **${position.symbol}**: $${marketValue.toFixed(2)} value `;
+            response += `| ${unrealizedGL >= 0 ? 'Gain' : 'Loss'}: $${Math.abs(unrealizedGL).toFixed(2)} `;
+            response += `| Tax Status: ${position.is_long_term ? 'Long-term ✓' : 'Short-term'} `;
+            response += `| Tax if Sold: $${expectedTax.toFixed(2)}\n`;
+          });
+        } else {
+          response = `**Ready to Build Your Tax-Efficient Portfolio!**\n\nOnce you start trading, I'll provide detailed tax analysis for every position including optimal timing strategies and tax-loss harvesting opportunities.`;
+        }
+      } else if (userMessage.toLowerCase().includes('capital gains')) {
+        response = `**Your 2024 Tax Strategy Based on ${income.toLocaleString()} Income:**\n\n`;
+        response += `**Filing Status:** ${filingStatus === 'single' ? 'Single' : filingStatus === 'married' ? 'Married Filing Jointly' : 'Head of Household'}\n\n`;
+        
+        const ordinaryBracket = getTaxBracket(income, filingStatus);
+        const capitalGainsBracket = getLongTermCapitalGainsBracket(income, filingStatus);
+        
+        response += `**Your Personal Tax Rates:**\n`;
+        response += `• Short-term gains (≤1 year): ${ordinaryBracket.rate}% (treated as regular income)\n`;
+        response += `• Long-term gains (>1 year): ${capitalGainsBracket.rate}% (preferential rate)\n`;
+        response += `• **Tax Savings by Holding >1 Year: ${ordinaryBracket.rate - capitalGainsBracket.rate} percentage points**\n\n`;
+        
+        if (realPortfolio.length > 0) {
+          const shortTermValue = realPortfolio.filter(p => !p.is_long_term).reduce((sum, p) => sum + ((p.current_price || 0) * p.shares), 0);
+          const longTermValue = realPortfolio.filter(p => p.is_long_term).reduce((sum, p) => sum + ((p.current_price || 0) * p.shares), 0);
+          
+          response += `**Your Portfolio's Tax Efficiency:**\n`;
+          if (shortTermValue > 0) {
+            response += `• Short-term holdings: $${shortTermValue.toFixed(2)} (${((shortTermValue / (shortTermValue + longTermValue)) * 100).toFixed(1)}%) - Higher tax rate\n`;
+          }
+          if (longTermValue > 0) {
+            response += `• Long-term holdings: $${longTermValue.toFixed(2)} (${((longTermValue / (shortTermValue + longTermValue)) * 100).toFixed(1)}%) - Favorable tax rate\n`;
+          }
+          
+          // Show potential savings
+          const shortTermPositions = realPortfolio.filter(p => !p.is_long_term && (p.unrealized_gain_loss || 0) > 0);
+          if (shortTermPositions.length > 0) {
+            const potentialSavings = shortTermPositions.reduce((sum, p) => {
+              const gain = p.unrealized_gain_loss || 0;
+              return sum + (gain * (ordinaryBracket.rate - capitalGainsBracket.rate) / 100);
+            }, 0);
+            response += `\n**Immediate Opportunity:**\n`;
+            response += `• You have ${shortTermPositions.length} profitable short-term positions\n`;
+            response += `• By holding them until they become long-term, you'll save approximately $${potentialSavings.toFixed(2)} in taxes\n`;
+            response += `• **Recommendation**: Unless you need the cash, hold these positions past the 1-year mark`;
+          }
+        } else {
+          response += `\n**Strategy for Future Trades:**\n`;
+          response += `• Your ${capitalGainsBracket.rate}% long-term rate is ${ordinaryBracket.rate - capitalGainsBracket.rate} points lower than short-term\n`;
+          response += `• Plan to hold winning positions >1 year when possible\n`;
+          response += `• Use short-term losses to offset short-term gains`;
+        }
+      } else if (userMessage.toLowerCase().includes('loss') && userMessage.toLowerCase().includes('harvest')) {
+        response = `**Tax Loss Harvesting Opportunities in Your Portfolio:**\n\n`;
+        const losers = realPortfolio.filter(p => (p.unrealized_gain_loss || 0) < 0);
+        const winners = realPortfolio.filter(p => (p.unrealized_gain_loss || 0) > 0);
+        
+        if (losers.length > 0) {
+          const totalLosses = losers.reduce((sum, p) => sum + Math.abs(p.unrealized_gain_loss || 0), 0);
+          const totalGains = winners.reduce((sum, p) => sum + (p.unrealized_gain_loss || 0), 0);
+          
+          response += `**Prime Harvesting Candidates:**\n`;
+          response += `• ${losers.length} positions with losses totaling $${totalLosses.toFixed(2)}\n`;
+          response += `• ${winners.length} positions with gains totaling $${totalGains.toFixed(2)}\n\n`;
+          
+          response += `**Execute These Harvesting Trades:**\n`;
+          const topLosers = [...losers]
+            .sort((a, b) => (a.unrealized_gain_loss || 0) - (b.unrealized_gain_loss || 0))
+            .slice(0, 5);
+          
+          topLosers.forEach((position, i) => {
+            const loss = Math.abs(position.unrealized_gain_loss || 0);
+            const taxRate = position.is_long_term 
+              ? getLongTermCapitalGainsBracket(income, filingStatus).rate 
+              : getTaxBracket(income, filingStatus).rate;
+            const taxSavings = loss * taxRate / 100;
+            response += `${i + 1}. **SELL ${position.symbol}**: Lock in $${loss.toFixed(2)} loss `;
+            response += `(${position.is_long_term ? 'Long' : 'Short'}-term) → Save $${taxSavings.toFixed(2)} in taxes\n`;
+          });
+          
+          response += `\n**Your Harvesting Strategy:**\n`;
+          response += `• Immediately offset $${Math.min(totalGains, totalLosses).toFixed(2)} of your gains with losses\n`;
+          if (totalLosses > totalGains) {
+            response += `• Use $${Math.min(3000, totalLosses - totalGains).toFixed(2)} of excess losses to reduce ordinary income\n`;
+            if (totalLosses - totalGains > 3000) {
+              response += `• Carry forward $${(totalLosses - totalGains - 3000).toFixed(2)} to future years\n`;
+            }
+          }
+          response += `• **Critical**: Wait 31+ days before repurchasing to avoid wash sales\n`;
+          response += `• **Alternative**: Buy similar (not identical) ETFs to maintain market exposure`;
+        } else {
+          response += `**No Current Harvesting Opportunities**\n\n`;
+          response += `All ${realPortfolio.length} of your holdings are profitable or at break-even:\n`;
+          realPortfolio.slice(0, 5).forEach((position, i) => {
+            const gl = position.unrealized_gain_loss || 0;
+            response += `• **${position.symbol}**: ${gl >= 0 ? 'Gain' : 'Loss'} of $${Math.abs(gl).toFixed(2)}\n`;
+          });
+          response += `\n**Your Strategy:**\n`;
+          response += `• Monitor for future dips to create harvesting opportunities\n`;
+          response += `• Continue building long-term positions for preferential tax treatment\n`;
+          response += `• Consider rebalancing near year-end if opportunities arise`;
+        }
+      } else {
+        // Default enhanced response with portfolio context
+        if (realPortfolio.length > 0) {
+          const totalValue = realPortfolio.reduce((sum, p) => sum + ((p.current_price || 0) * p.shares), 0);
+          const totalUnrealized = realPortfolio.reduce((sum, p) => sum + (p.unrealized_gain_loss || 0), 0);
+          const totalExpectedTax = realPortfolio.reduce((sum, p) => sum + calculateExpectedTax(p), 0);
+          
+          response = `**Your Complete Tax Dashboard:**\n\n`;
+          response += `**Portfolio Snapshot:**\n`;
+          response += `• ${realPortfolio.length} total positions worth $${totalValue.toFixed(2)}\n`;
+          response += `• ${realPortfolio.filter(p => p.is_long_term).length} long-term positions (${((realPortfolio.filter(p => p.is_long_term).length / realPortfolio.length) * 100).toFixed(0)}% tax-advantaged)\n`;
+          response += `• ${realPortfolio.filter(p => !p.is_long_term).length} short-term positions (${((realPortfolio.filter(p => !p.is_long_term).length / realPortfolio.length) * 100).toFixed(0)}% at higher tax rates)\n\n`;
+          
+          response += `**Tax Impact Analysis:**\n`;
+          response += `• Current unrealized gain/loss: $${totalUnrealized.toFixed(2)}\n`;
+          response += `• Tax bill if you sold everything today: $${totalExpectedTax.toFixed(2)}\n`;
+          response += `• Your net after-tax proceeds: $${(totalUnrealized - totalExpectedTax).toFixed(2)}\n`;
+          response += `• Your tax rates: ${getTaxBracket(income, filingStatus).rate}% (short-term) vs ${getLongTermCapitalGainsBracket(income, filingStatus).rate}% (long-term)\n\n`;
+          
+          if (taxCalculation.washSaleViolations.length > 0) {
+            response += `• 🚨 **${taxCalculation.washSaleViolations.length} wash sale violations detected** - You're losing tax deductions!\n\n`;
+          }
+          
+          response += `**Get Specific Guidance:**\n`;
+          response += `• "Analyze my wash sales" - Check compliance issues\n`;
+          response += `• "Show loss harvesting opportunities" - Find tax-saving trades\n`;
+          response += `• "How much will I save holding longer?" - Time your sales\n`;
+          response += `• "Best order to sell positions" - Optimize your exit strategy`;
+        } else {
+          response = `**Ready to Optimize Your Tax Strategy!**\n\n`;
+          response += `**Your Personal Tax Rates (Income: $${income.toLocaleString()}):**\n`;
+          response += `• Short-term capital gains: ${getTaxBracket(income, filingStatus).rate}%\n`;
+          response += `• Long-term capital gains: ${getLongTermCapitalGainsBracket(income, filingStatus).rate}%\n`;
+          response += `• **Savings by holding >1 year: ${getTaxBracket(income, filingStatus).rate - getLongTermCapitalGainsBracket(income, filingStatus).rate} percentage points**\n\n`;
+          response += `**Start Trading Strategy:**\n`;
+          response += `• Focus on positions you plan to hold long-term\n`;
+          response += `• Use losses strategically to offset gains\n`;
+          response += `• Avoid wash sale violations by waiting 31+ days\n`;
+          response += `• Once you have positions, I'll provide specific guidance on each holding`;
+        }
+      }
+
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: response,
+        id: generateMessageId()
+      }]);
+    } finally {
+      setIsLoading(false);
+      setThinkingState(null);
+    }
+  };
+
+  // Add function to calculate tax bracket
+  const getTaxBracket = (income: number, filingStatus: 'single' | 'married' | 'head') => {
+    if (filingStatus === 'single') {
+      if (income <= 11000) return { rate: 10, range: '$0 - $11,000' };
+      if (income <= 44725) return { rate: 12, range: '$11,001 - $44,725' };
+      if (income <= 95375) return { rate: 22, range: '$44,726 - $95,375' };
+      if (income <= 182050) return { rate: 24, range: '$95,376 - $182,050' };
+      if (income <= 231250) return { rate: 32, range: '$182,051 - $231,250' };
+      if (income <= 578125) return { rate: 35, range: '$231,251 - $578,125' };
+      return { rate: 37, range: '$578,126+' };
+    } else if (filingStatus === 'married') {
+      if (income <= 22000) return { rate: 10, range: '$0 - $22,000' };
+      if (income <= 89450) return { rate: 12, range: '$22,001 - $89,450' };
+      if (income <= 190750) return { rate: 22, range: '$89,451 - $190,750' };
+      if (income <= 364200) return { rate: 24, range: '$190,751 - $364,200' };
+      if (income <= 462500) return { rate: 32, range: '$364,201 - $462,500' };
+      if (income <= 693750) return { rate: 35, range: '$462,501 - $693,750' };
+      return { rate: 37, range: '$693,751+' };
+    } else { // head of household
+      if (income <= 15700) return { rate: 10, range: '$0 - $15,700' };
+      if (income <= 59850) return { rate: 12, range: '$15,701 - $59,850' };
+      if (income <= 95350) return { rate: 22, range: '$59,851 - $95,350' };
+      if (income <= 182050) return { rate: 24, range: '$95,351 - $182,050' };
+      if (income <= 231250) return { rate: 32, range: '$182,051 - $231,250' };
+      if (income <= 578100) return { rate: 35, range: '$231,251 - $578,100' };
+      return { rate: 37, range: '$578,101+' };
+    }
+  };
+
+  const getLongTermCapitalGainsBracket = (income: number, filingStatus: 'single' | 'married' | 'head') => {
+    if (filingStatus === 'single') {
+      if (income <= 47025) return { rate: 0, range: '$0 - $47,025' };
+      if (income <= 518900) return { rate: 15, range: '$47,026 - $518,900' };
+      return { rate: 20, range: '$518,901+' };
+    } else if (filingStatus === 'married') {
+      if (income <= 94050) return { rate: 0, range: '$0 - $94,050' };
+      if (income <= 583750) return { rate: 15, range: '$94,051 - $583,750' };
+      return { rate: 20, range: '$583,751+' };
+    } else { // head of household
+      if (income <= 63000) return { rate: 0, range: '$0 - $63,000' };
+      if (income <= 551350) return { rate: 15, range: '$63,001 - $551,350' };
+      return { rate: 20, range: '$551,351+' };
+    }
+  };
 
   useEffect(() => {
     // Inject custom styles
@@ -439,7 +921,7 @@ const TaxesPage: React.FC = () => {
           portfolioData.map(async (item) => {
             try {
               // Get current stock price
-              const stockData = await fetchStock(item.symbol);
+              const stockData: StockResponse = await fetchStock(item.symbol);
               const currentPrice = stockData.price || item.average_price;
               
               const holdingPeriodDays = Math.floor(
@@ -707,176 +1189,6 @@ const TaxesPage: React.FC = () => {
 
     const taxRate = getTaxRate(income, position.is_long_term || false);
     return position.unrealized_gain_loss * taxRate;
-  };
-
-  const generateMessageId = () => {
-    return Date.now().toString() + Math.random().toString(36).substr(2, 9);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
-
-    const userMessage: Message = {
-      role: 'user',
-      content: input,
-      id: generateMessageId()
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
-    setIsLoading(true);
-
-    setTimeout(() => {
-      let response = '';
-      
-      if (input.toLowerCase().includes('wash sale')) {
-        const violations = taxCalculation.washSaleViolations;
-        if (violations.length > 0) {
-          response = `**Wash Sale Analysis for Your Portfolio:**\n\n`;
-          response += `Found ${violations.length} potential wash sale violation(s):\n\n`;
-          violations.forEach((violation, i) => {
-            response += `${i + 1}. **${violation.symbol}**\n`;
-            response += `   • Loss Amount: $${violation.lossAmount.toFixed(2)}\n`;
-            response += `   • Adjusted Basis: $${violation.adjustedBasis.toFixed(2)}\n\n`;
-          });
-          response += `**What this means:**\n`;
-          response += `• These losses cannot be deducted currently\n`;
-          response += `• The loss is added to your cost basis in the repurchased shares\n`;
-          response += `• You'll get the tax benefit when you finally sell\n`;
-          response += `• Wait 31+ days before repurchasing to avoid wash sales`;
-        } else {
-          response = `**Good news!** Based on your current portfolio, I don't see any wash sale violations.\n\n`;
-          response += `**Wash Sale Rules:**\n`;
-          response += `• Cannot claim a loss if you repurchase the same stock within 30 days\n`;
-          response += `• Applies 30 days before AND after the sale\n`;
-          response += `• Loss gets added to the cost basis of new shares\n`;
-          response += `• Use different ETFs or wait 31+ days to avoid violations`;
-        }
-      } else if (input.toLowerCase().includes('portfolio') || input.toLowerCase().includes('holdings')) {
-        if (realPortfolio.length > 0) {
-          response = `**Your Current Tax Situation:**\n\n`;
-          response += `**Holdings Analysis:**\n`;
-          const longTermPositions = realPortfolio.filter(p => p.is_long_term).length;
-          const shortTermPositions = realPortfolio.length - longTermPositions;
-          
-          response += `• ${longTermPositions} long-term positions (>1 year)\n`;
-          response += `• ${shortTermPositions} short-term positions (≤1 year)\n\n`;
-          
-          response += `**Unrealized Gains/Losses:**\n`;
-          const totalUnrealized = realPortfolio.reduce((sum, p) => sum + (p.unrealized_gain_loss || 0), 0);
-          response += `• Total unrealized: $${totalUnrealized.toFixed(2)}\n`;
-          
-          response += `\n**Tax Planning Tips:**\n`;
-          response += `• Consider holding short-term positions >1 year for better rates\n`;
-          response += `• Harvest losses before year-end\n`;
-          response += `• Time your sales strategically`;
-        } else {
-          response = `You don't have any current holdings. Start building a portfolio to see tax implications!`;
-        }
-      } else if (input.toLowerCase().includes('capital gains')) {
-        response = `**2024 Capital Gains Tax Rates:**\n\n`;
-        response += `**Short-term (≤1 year) - Taxed as ordinary income:**\n`;
-        if (filingStatus === 'single') {
-          response += `• 10%: $0 - $11,000\n• 12%: $11,001 - $44,725\n• 22%: $44,726 - $95,375\n• 24%: $95,376 - $182,050\n• 32%: $182,051 - $231,250\n• 35%: $231,251 - $578,125\n• 37%: $578,126+\n\n`;
-        } else {
-          response += `• 10%: $0 - $22,000\n• 12%: $22,001 - $89,450\n• 22%: $89,451 - $190,750\n• 24%: $190,751 - $364,200\n• 32%: $364,201 - $462,500\n• 35%: $462,501 - $693,750\n• 37%: $693,751+\n\n`;
-        }
-        
-        response += `**Long-term (>1 year):**\n`;
-        if (filingStatus === 'single') {
-          response += `• 0%: Income up to $47,025\n• 15%: $47,026 - $518,900\n• 20%: $518,901+\n\n`;
-        } else {
-          response += `• 0%: Income up to $94,050\n• 15%: $94,051 - $583,750\n• 20%: $583,751+\n\n`;
-        }
-        
-        response += `**Your estimated rate:** ${taxCalculation.effectiveRate.toFixed(1)}%`;
-      } else if (input.toLowerCase().includes('loss') && input.toLowerCase().includes('harvest')) {
-        response = `**Tax Loss Harvesting Strategy:**\n\n`;
-        const losers = realPortfolio.filter(p => (p.unrealized_gain_loss || 0) < 0);
-        
-        if (losers.length > 0) {
-          response += `**Positions with unrealized losses:**\n`;
-          losers.forEach(position => {
-            response += `• ${position.symbol}: $${(position.unrealized_gain_loss || 0).toFixed(2)} `;
-            response += `(${position.is_long_term ? 'Long-term' : 'Short-term'})\n`;
-          });
-          
-          response += `\n**Strategy:**\n`;
-          response += `• Sell losing positions to offset gains\n`;
-          response += `• Match short-term losses with short-term gains first\n`;
-          response += `• $3,000 annual deduction limit for excess losses\n`;
-          response += `• Carry forward remaining losses\n`;
-          response += `• Avoid wash sale rules (wait 31+ days to repurchase)`;
-        } else {
-          response += `Currently, you don't have positions with unrealized losses to harvest.\n\n`;
-          response += `**General Strategy:**\n`;
-          response += `• Monitor portfolio for harvesting opportunities\n`;
-          response += `• Best done near year-end\n`;
-          response += `• Can offset up to $3,000 of ordinary income annually`;
-        } 
-      } else {
-        response = `**Tax Planning for Your Portfolio:**\n\n`;
-        response += `• Current estimated tax: $${taxCalculation.totalTax.toFixed(2)}\n`;
-        response += `• Effective rate: ${taxCalculation.effectiveRate.toFixed(1)}%\n`;
-        response += `• Wash sale violations: ${taxCalculation.washSaleViolations.length}\n`;
-        response += `• Loss carryforward: $${taxCalculation.lossCarryforward.toFixed(2)}\n\n`;
-        response += `Ask me about specific topics like "wash sales", "capital gains rates", or "loss harvesting" for detailed guidance.`;
-      }
-
-      const assistantMessage: Message = {
-        role: 'assistant',
-        content: response,
-        id: generateMessageId()
-      };
-      setMessages(prev => [...prev, assistantMessage]);
-      setIsLoading(false);
-    }, 1000);
-  };
-
-  // Add function to calculate tax bracket
-  const getTaxBracket = (income: number, filingStatus: 'single' | 'married' | 'head') => {
-    if (filingStatus === 'single') {
-      if (income <= 11000) return { rate: 10, range: '$0 - $11,000' };
-      if (income <= 44725) return { rate: 12, range: '$11,001 - $44,725' };
-      if (income <= 95375) return { rate: 22, range: '$44,726 - $95,375' };
-      if (income <= 182050) return { rate: 24, range: '$95,376 - $182,050' };
-      if (income <= 231250) return { rate: 32, range: '$182,051 - $231,250' };
-      if (income <= 578125) return { rate: 35, range: '$231,251 - $578,125' };
-      return { rate: 37, range: '$578,126+' };
-    } else if (filingStatus === 'married') {
-      if (income <= 22000) return { rate: 10, range: '$0 - $22,000' };
-      if (income <= 89450) return { rate: 12, range: '$22,001 - $89,450' };
-      if (income <= 190750) return { rate: 22, range: '$89,451 - $190,750' };
-      if (income <= 364200) return { rate: 24, range: '$190,751 - $364,200' };
-      if (income <= 462500) return { rate: 32, range: '$364,201 - $462,500' };
-      if (income <= 693750) return { rate: 35, range: '$462,501 - $693,750' };
-      return { rate: 37, range: '$693,751+' };
-    } else { // head of household
-      if (income <= 15700) return { rate: 10, range: '$0 - $15,700' };
-      if (income <= 59850) return { rate: 12, range: '$15,701 - $59,850' };
-      if (income <= 95350) return { rate: 22, range: '$59,851 - $95,350' };
-      if (income <= 182050) return { rate: 24, range: '$95,351 - $182,050' };
-      if (income <= 231250) return { rate: 32, range: '$182,051 - $231,250' };
-      if (income <= 578100) return { rate: 35, range: '$231,251 - $578,100' };
-      return { rate: 37, range: '$578,101+' };
-    }
-  };
-
-  const getLongTermCapitalGainsBracket = (income: number, filingStatus: 'single' | 'married' | 'head') => {
-    if (filingStatus === 'single') {
-      if (income <= 47025) return { rate: 0, range: '$0 - $47,025' };
-      if (income <= 518900) return { rate: 15, range: '$47,026 - $518,900' };
-      return { rate: 20, range: '$518,901+' };
-    } else if (filingStatus === 'married') {
-      if (income <= 94050) return { rate: 0, range: '$0 - $94,050' };
-      if (income <= 583750) return { rate: 15, range: '$94,051 - $583,750' };
-      return { rate: 20, range: '$583,751+' };
-    } else { // head of household
-      if (income <= 63000) return { rate: 0, range: '$0 - $63,000' };
-      if (income <= 551350) return { rate: 15, range: '$63,001 - $551,350' };
-      return { rate: 20, range: '$551,351+' };
-    }
   };
 
   if (loading) {
@@ -1350,6 +1662,7 @@ const TaxesPage: React.FC = () => {
             <h1 className="text-6xl font-extrabold bg-gradient-to-r from-green-400 via-blue-400 to-purple-400 bg-clip-text text-transparent mb-6 text-center">CoPilot</h1>
             <p className="text-lg text-gray-200 mb-10 text-center font-medium">Tax guidance for your portfolio</p>
             
+            {/* Show suggestions when no messages */}
             {messages.length === 0 ? (
               <div className="w-full max-w-md px-4 space-y-6 mb-8">
                 <form onSubmit={handleSubmit} className="w-full mb-6">
@@ -1358,6 +1671,10 @@ const TaxesPage: React.FC = () => {
                       ref={textareaRef}
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
+                      onInput={(e) => {
+                        e.currentTarget.style.height = 'auto';
+                        e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
+                      }}
                       placeholder="Ask about your portfolio's tax implications..."
                       className="w-full bg-[#23294a] text-white rounded-xl px-6 py-4 pr-12 focus:outline-none focus:ring-2 focus:ring-green-400 text-lg shadow-lg placeholder-shine resize-none overflow-hidden"
                     />
@@ -1376,28 +1693,56 @@ const TaxesPage: React.FC = () => {
 
                 <div className="w-full grid grid-cols-2 gap-4 mt-6 mb-6">
                   <button
-                    onClick={() => setInput("Analyze my portfolio for wash sales")}
+                    onClick={() => {
+                      setInput("Analyze my portfolio for wash sales");
+                      setTimeout(() => {
+                        const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+                        const form = document.querySelector('form');
+                        if (form) form.dispatchEvent(submitEvent);
+                      }, 0);
+                    }}
                     className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-red-500 hover:border-red-400 text-left shadow-lg"
                   >
                     <div className="font-semibold text-red-400 mb-2">Wash Sales</div>
-                    <div className="text-xs text-gray-300">Check my holdings</div>
+                    <div className="text-xs text-gray-300">Check my holdings for violations</div>
                   </button>
                   <button
-                    onClick={() => setInput("Show my portfolio tax implications")}
+                    onClick={() => {
+                      setInput("What's my current capital gains tax liability based on my portfolio?");
+                      setTimeout(() => {
+                        const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+                        const form = document.querySelector('form');
+                        if (form) form.dispatchEvent(submitEvent);
+                      }, 0);
+                    }}
                     className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-green-500 hover:border-green-400 text-left shadow-lg"
                   >
-                    <div className="font-semibold text-green-400 mb-2">My Portfolio</div>
-                    <div className="text-xs text-gray-300">Tax analysis</div>
+                    <div className="font-semibold text-green-400 mb-2">Tax Liability</div>
+                    <div className="text-xs text-gray-300">Current portfolio tax implications</div>
                   </button>
                   <button
-                    onClick={() => setInput("Help me with loss harvesting")}
+                    onClick={() => {
+                      setInput("Help me with tax loss harvesting strategy for my holdings");
+                      setTimeout(() => {
+                        const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+                        const form = document.querySelector('form');
+                        if (form) form.dispatchEvent(submitEvent);
+                      }, 0);
+                    }}
                     className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-purple-500 hover:border-purple-400 text-left shadow-lg"
                   >
                     <div className="font-semibold text-purple-400 mb-2">Loss Harvesting</div>
                     <div className="text-xs text-gray-300">Strategy for my holdings</div>
                   </button>
                   <button
-                    onClick={() => setInput("What are capital gains rates for my income?")}
+                    onClick={() => {
+                      setInput("What are the 2024 capital gains rates for my income level?");
+                      setTimeout(() => {
+                        const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+                        const form = document.querySelector('form');
+                        if (form) form.dispatchEvent(submitEvent);
+                      }, 0);
+                    }}
                     className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-yellow-500 hover:border-yellow-400 text-left shadow-lg"
                   >
                     <div className="font-semibold text-yellow-400 mb-2">Tax Rates</div>
@@ -1407,47 +1752,81 @@ const TaxesPage: React.FC = () => {
               </div>
             ) : (
               <>
+                {/* Chat Messages */}
                 <div className="w-full max-w-md flex-1 overflow-y-auto px-4 space-y-4 mb-4">
                   {messages.map((message) => (
                     <div 
                       key={message.id} 
                       className={`${message.role === 'user' ? 'ml-auto' : 'mr-auto'} max-w-[80%] group animate-fade-in`}
+                      style={{ animation: 'fadeIn 0.3s ease-out' }}
                     >
+                      {/* Toolbar above assistant messages */}
+                      {message.role === 'assistant' && (
+                        <div className="flex space-x-1 mb-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => navigator.clipboard.writeText(message.content)}
+                            className="p-1 rounded bg-gray-800 hover:bg-gray-700"
+                            aria-label="Copy message"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                            </svg>
+                          </button>
+                        </div>
+                      )}
                       <div className={`rounded-xl p-4 ${
                         message.role === 'user' 
                           ? 'bg-gray-700 text-white' 
                           : 'bg-[#23294a] text-white'
                       }`}>
-                        <div className="prose prose-invert max-w-none break-words whitespace-pre-wrap text-sm">
-                          {message.content.split('\n').map((line, i) => (
-                            <p key={i} className="mb-2 last:mb-0">{line}</p>
-                          ))}
+                        <div className="prose prose-invert max-w-none break-words">
+                          {formatMessageContent(message.content, realPortfolio, handleSelectStock)}
                         </div>
                       </div>
                     </div>
                   ))}
-                  {isLoading && (
-                    <div className="mr-auto max-w-[80%]">
-                      <div className="bg-[#23294a] rounded-xl p-4">
-                        <div className="flex space-x-1">
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                  {streamingMessage && (
+                    <div className="mr-auto max-w-[80%] animate-fade-in" style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                      <div className="bg-[#23294a] rounded-xl p-4 text-white">
+                        <div className="prose prose-invert max-w-none break-words">
+                          {formatMessageContent(streamingMessage, realPortfolio, handleSelectStock)}
                         </div>
                       </div>
                     </div>
                   )}
+                  {(isLoading && !streamingMessage) || thinkingState ? (
+                    <div className="mr-auto max-w-[80%]">
+                      <div className="bg-[#23294a] rounded-xl p-4 text-white">
+                        <div className="flex items-center space-x-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          <span className="animated-thinking-text">
+                            {thinkingState === 'thinking' && 'Analyzing your tax situation...'}
+                            {thinkingState === 'reasoning' && 'Calculating tax implications...'}
+                            {!thinkingState && 'Loading...'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div ref={messagesEndRef} />
+                  )}
+                  <div ref={messagesEndRef} />
                 </div>
 
-                <form onSubmit={handleSubmit} className="w-full max-w-md px-4 mb-4">
+                {/* Input Form - shown at bottom when there are messages */}
+                <form onSubmit={handleSubmit} className="w-full max-w-md px-4 mb-8">
                   <div className="relative">
                     <textarea
                       ref={textareaRef}
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
-                      placeholder="Ask about taxes..."
-                      className="w-full bg-[#23294a] text-white rounded-xl px-6 py-4 pr-12 focus:outline-none focus:ring-2 focus:ring-green-400 text-lg shadow-lg resize-none overflow-hidden"
+                      onInput={(e) => {
+                        e.currentTarget.style.height = 'auto';
+                        e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
+                      }}
                       rows={1}
+                      placeholder="Ask about taxes..."
+                      className="w-full bg-[#23294a] text-white rounded-xl px-6 py-4 pr-12 focus:outline-none focus:ring-2 focus:ring-green-400 text-lg shadow-lg placeholder-shine resize-none overflow-hidden"
                     />
                     <button 
                       type="submit"
@@ -1461,6 +1840,79 @@ const TaxesPage: React.FC = () => {
                     </button>
                   </div>
                 </form>
+
+                {/* Suggestion Buttons 2x2 Grid - only when messages.length === 1 */}
+                {messages.length === 1 && (
+                  <div className="w-full max-w-md px-4 mb-8">
+                    <div className="grid grid-cols-2 gap-4">
+                      <button
+                        onClick={() => {
+                          const message = "What percentage of my portfolio should I sell for tax loss harvesting?";
+                          setInput(message);
+                          setTimeout(() => {
+                            const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+                            const form = document.querySelector('form');
+                            if (form) form.dispatchEvent(submitEvent);
+                          }, 0);
+                        }}
+                        className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-green-400/50 hover:border-green-400 text-left shadow-lg"
+                      >
+                        <div className="font-semibold text-green-400 mb-2">Portfolio Strategy</div>
+                        <div className="text-xs text-gray-300">Optimal tax loss harvesting percentage</div>
+                      </button>
+                      <button
+                        onClick={() => {
+                          const message = "How much can I save by holding my short-term positions for one more year?";
+                          setInput(message);
+                          setTimeout(() => {
+                            const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+                            const form = document.querySelector('form');
+                            if (form) form.dispatchEvent(submitEvent);
+                          }, 0);
+                        }}
+                        className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-yellow-400/50 hover:border-yellow-400 text-left shadow-lg"
+                      >
+                        <div className="font-semibold text-yellow-400 mb-2">Timing Strategy</div>
+                        <div className="text-xs text-gray-300">Benefits of holding longer</div>
+                      </button>
+                      <button
+                        onClick={() => {
+                          const message = "What's the best tax-efficient order to sell my holdings?";
+                          setInput(message);
+                          setTimeout(() => {
+                            const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+                            const form = document.querySelector('form');
+                            if (form) form.dispatchEvent(submitEvent);
+                          }, 0);
+                        }}
+                        className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-blue-400/50 hover:border-blue-400 text-left shadow-lg"
+                      >
+                        <div className="font-semibold text-blue-400 mb-2">Sale Order</div>
+                        <div className="text-xs text-gray-300">Most tax-efficient selling sequence</div>
+                      </button>
+                      <button
+                        onClick={() => {
+                          const message = "How can I minimize my tax liability for next year based on my current holdings?";
+                          setInput(message);
+                          setTimeout(() => {
+                            const submitEvent = new Event('submit', { cancelable: true, bubbles: true });
+                            const form = document.querySelector('form');
+                            if (form) form.dispatchEvent(submitEvent);
+                          }, 0);
+                        }}
+                        className="min-h-[80px] p-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-white text-sm transition-all duration-200 border-2 border-purple-400/50 hover:border-purple-400 text-left shadow-lg"
+                      >
+                        <div className="font-semibold text-purple-400 mb-2">Tax Minimization</div>
+                        <div className="text-xs text-gray-300">Reduce next year's tax liability</div>
+                      </button>
+                    </div>
+                    <div className="mt-6 flex justify-center">
+                      <button className="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white font-semibold hover:opacity-90 transition-opacity duration-200">
+                        See More Tax Strategies
+                      </button>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>
