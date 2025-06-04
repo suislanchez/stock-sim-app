@@ -195,7 +195,7 @@ const formatMessageContent = (content: string, portfolio: RealPortfolioItem[], o
     <div className="whitespace-pre-wrap">
       {cleanedContent.split('\n').map((line, lineIndex) => {
         // Process each line separately
-        let parts: Array<{ type: 'text' | 'stock' | 'url'; content: string; url?: string }> = [];
+        const parts: Array<{ type: 'text' | 'stock' | 'url'; content: string; url?: string }> = [];
         let lastIndex = 0;
 
         // Find all matches (URLs and stocks) in this line
