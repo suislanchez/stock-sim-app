@@ -12,6 +12,7 @@
     "@langchain/core": "^0.3.57",
     "@langchain/openai": "^0.5.11",
     "@supabase/supabase-js": "^2.49.4",
+    "@vercel/analytics": "^1.5.0",
     "langchain": "^0.3.27",
     "lightweight-charts": "^5.0.6",
     "next": "15.3.1",
