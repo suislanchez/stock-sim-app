@@ -182,26 +182,117 @@ const getStockColor = (symbol: string, portfolio: RealPortfolioItem[]) => {
 const formatMessageContent = (content: string, portfolio: RealPortfolioItem[], onSelectStock: (symbol: string) => void) => {
   if (!content) return null;
 
+  // Remove asterisks and hashtags using regex
+  const cleanedContent = content.replace(/[*#]/g, '');
+
+  // URL regex to match http/https URLs
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  
   // Pattern to match stock symbols (2-5 uppercase letters, possibly followed by numbers)
   const stockPattern = /\b[A-Z]{2,5}[0-9]*\b/g;
-  const parts = content.split(stockPattern);
-  const matches = content.match(stockPattern) || [];
 
   return (
     <div className="whitespace-pre-wrap">
-      {parts.map((part, index) => (
-        <React.Fragment key={index}>
-          {part}
-          {matches[index] && (
-            <button
-              onClick={() => onSelectStock(matches[index])}
-              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mx-1 transition-all duration-200 ${getStockColor(matches[index], portfolio)}`}
-            >
-              {matches[index]}
-            </button>
-          )}
-        </React.Fragment>
-      ))}
+      {cleanedContent.split('\n').map((line, lineIndex) => {
+        // Process each line separately
+        let parts: Array<{ type: 'text' | 'stock' | 'url'; content: string; url?: string }> = [];
+        let lastIndex = 0;
+
+        // Find all matches (URLs and stocks) in this line
+        const allMatches: Array<{ type: 'stock' | 'url'; match: string; index: number; url?: string }> = [];
+        
+        // Find URLs
+        let urlMatch;
+        const urlRegexCopy = new RegExp(urlRegex.source, urlRegex.flags);
+        while ((urlMatch = urlRegexCopy.exec(line)) !== null) {
+          allMatches.push({
+            type: 'url',
+            match: urlMatch[0],
+            index: urlMatch.index,
+            url: urlMatch[0]
+          });
+        }
+        
+        // Find stock symbols
+        let stockMatch;
+        const stockRegexCopy = new RegExp(stockPattern.source, stockPattern.flags);
+        while ((stockMatch = stockRegexCopy.exec(line)) !== null) {
+          allMatches.push({
+            type: 'stock',
+            match: stockMatch[0],
+            index: stockMatch.index
+          });
+        }
+
+        // Sort matches by index
+        allMatches.sort((a, b) => a.index - b.index);
+
+        // Build parts array
+        allMatches.forEach(match => {
+          // Add text before this match
+          if (match.index > lastIndex) {
+            const textContent = line.substring(lastIndex, match.index);
+            if (textContent) {
+              parts.push({ type: 'text', content: textContent });
+            }
+          }
+          
+          // Add the match
+          parts.push({
+            type: match.type,
+            content: match.match,
+            url: match.url
+          });
+          
+          lastIndex = match.index + match.match.length;
+        });
+
+        // Add remaining text
+        if (lastIndex < line.length) {
+          const remainingText = line.substring(lastIndex);
+          if (remainingText) {
+            parts.push({ type: 'text', content: remainingText });
+          }
+        }
+
+        // If no matches found, treat entire line as text
+        if (parts.length === 0) {
+          parts.push({ type: 'text', content: line });
+        }
+
+        return (
+          <div key={lineIndex}>
+            {parts.map((part, partIndex) => {
+              if (part.type === 'url' && part.url) {
+                return (
+                  <a
+                    key={partIndex}
+                    href={part.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:text-blue-300 underline decoration-blue-400 hover:decoration-blue-300 transition-colors"
+                  >
+                    {part.url}
+                  </a>
+                );
+              } else if (part.type === 'stock') {
+                return (
+                  <button
+                    key={partIndex}
+                    onClick={() => onSelectStock(part.content)}
+                    className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mx-1 transition-all duration-200 ${getStockColor(part.content, portfolio)}`}
+                  >
+                    {part.content}
+                  </button>
+                );
+              } else {
+                return <span key={partIndex}>{part.content}</span>;
+              }
+            })}
+            {lineIndex < cleanedContent.split('\n').length - 1 && <br />}
+          </div>
+        );
+      })}
     </div>
   );
 };

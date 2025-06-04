@@ -496,6 +496,9 @@ const getStockColor = (symbol: string, portfolio: PortfolioItem[], moverType: 'g
 
 // Add this function to format message content with colored tickers
 const formatMessageContent = (content: string, portfolio: PortfolioItem[], onSelectStock: (symbol: string) => void, moverType: 'gainers' | 'losers' | 'active' | null = null, marketMovers: MarketMovers | null = null) => {
+  // Remove asterisks and hashtags using regex
+  const cleanedContent = content.replace(/[*#]/g, '');
+  
   // Match stock symbols (uppercase letters) but exclude common words
   const commonWords = [
     // Common words
@@ -526,14 +529,58 @@ const formatMessageContent = (content: string, portfolio: PortfolioItem[], onSel
   const commonWordsPattern = commonWords.join('|');
   const stockRegex = new RegExp(`(?<!${commonWordsPattern})(?<=\\b)([A-Z]{2,5}(?:\\.[A-Z])?)(?=\\b)`, 'g');
   
-  return content.split('\n').map((line, i) => {
-    // Find all unique matches first
-    const matches = Array.from(new Set(line.match(stockRegex) || []));
+  // URL regex to match http/https URLs
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  
+  // Price regex to match dollar amounts
+  const priceRegex = /\$\d+(?:,\d{3})*(?:\.\d{2})?/g;
+
+  // Percentage regex to match percentages
+  const percentageRegex = /(?<!\d)(?:\+|-)?\d+(?:\.\d+)?%/g;
+  
+  return cleanedContent.split('\n').map((line, i) => {
+    // First, find and replace URLs
+    const urlMatches = Array.from(line.matchAll(urlRegex));
+    let processedLine = line;
+    const urlReplacements: Array<{ original: string; replacement: string; url: string }> = [];
+    
+    urlMatches.forEach((match, index) => {
+      const url = match[0];
+      const placeholder = `__URL_PLACEHOLDER_${index}__`;
+      urlReplacements.push({ original: placeholder, replacement: placeholder, url });
+      processedLine = processedLine.replace(url, placeholder);
+    });
+
+    // Find and replace prices
+    const priceMatches = Array.from(processedLine.matchAll(priceRegex));
+    const priceReplacements: Array<{ original: string; replacement: string }> = [];
+    
+    priceMatches.forEach((match, index) => {
+      const price = match[0];
+      const placeholder = `__PRICE_PLACEHOLDER_${index}__`;
+      priceReplacements.push({ original: placeholder, replacement: price });
+      processedLine = processedLine.replace(price, placeholder);
+    });
+
+    // Find and replace percentages
+    const percentageMatches = Array.from(processedLine.matchAll(percentageRegex));
+    const percentageReplacements: Array<{ original: string; replacement: string }> = [];
+    
+    percentageMatches.forEach((match, index) => {
+      const percentage = match[0];
+      const placeholder = `__PERCENTAGE_PLACEHOLDER_${index}__`;
+      percentageReplacements.push({ original: placeholder, replacement: percentage });
+      processedLine = processedLine.replace(percentage, placeholder);
+    });
+    
+    // Find all unique stock symbol matches
+    const matches = Array.from(new Set(processedLine.match(stockRegex) || []));
     
     // Create a map of matches to their positions
     const matchPositions = new Map();
     let match;
-    while ((match = stockRegex.exec(line)) !== null) {
+    const tempRegex = new RegExp(stockRegex.source, stockRegex.flags);
+    while ((match = tempRegex.exec(processedLine)) !== null) {
       if (!matchPositions.has(match[0])) {
         matchPositions.set(match[0], match.index);
       }
@@ -542,8 +589,10 @@ const formatMessageContent = (content: string, portfolio: PortfolioItem[], onSel
     // Sort matches by their position in the text
     matches.sort((a, b) => (matchPositions.get(a) || 0) - (matchPositions.get(b) || 0));
     
-    // Split the line by the matches
-    let parts = [line];
+    // Split the line by the matches and URL placeholders
+    let parts = [processedLine];
+    
+    // Split by stock symbols
     matches.forEach(match => {
       parts = parts.flatMap(part => {
         const split = part.split(match);
@@ -551,12 +600,38 @@ const formatMessageContent = (content: string, portfolio: PortfolioItem[], onSel
       });
     });
     
+    // Split by URL placeholders
+    urlReplacements.forEach(({ original }) => {
+      parts = parts.flatMap(part => {
+        const split = part.split(original);
+        return split.flatMap((p, i) => i === 0 ? [p] : [original, p]);
+      });
+    });
+
+    // Split by price placeholders
+    priceReplacements.forEach(({ original }) => {
+      parts = parts.flatMap(part => {
+        const split = part.split(original);
+        return split.flatMap((p, i) => i === 0 ? [p] : [original, p]);
+      });
+    });
+
+    // Split by percentage placeholders
+    percentageReplacements.forEach(({ original }) => {
+      parts = parts.flatMap(part => {
+        const split = part.split(original);
+        return split.flatMap((p, i) => i === 0 ? [p] : [original, p]);
+      });
+    });
+    
     return (
       <p key={i} className="mb-2 last:mb-0">
-        {parts.map((part, j) => (
-          <span key={j}>
-            {matches.includes(part) ? (
+        {parts.map((part, j) => {
+          // Check if this part is a stock symbol
+          if (matches.includes(part)) {
+            return (
               <button
+                key={j}
                 onClick={() => onSelectStock(part)}
                 className="px-1.5 py-0.5 rounded-md font-medium hover:opacity-80 transition-opacity"
                 style={{ 
@@ -567,11 +642,56 @@ const formatMessageContent = (content: string, portfolio: PortfolioItem[], onSel
               >
                 {part}
               </button>
-            ) : (
-              part
-            )}
-          </span>
-        ))}
+            );
+          }
+          
+          // Check if this part is a URL placeholder
+          const urlReplacement = urlReplacements.find(ur => ur.original === part);
+          if (urlReplacement) {
+            return (
+              <a
+                key={j}
+                href={urlReplacement.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300 underline decoration-blue-400 hover:decoration-blue-300 transition-colors"
+              >
+                {urlReplacement.url}
+              </a>
+            );
+          }
+
+          // Check if this part is a price placeholder
+          const priceReplacement = priceReplacements.find(pr => pr.original === part);
+          if (priceReplacement) {
+            return (
+              <span
+                key={j}
+                className="text-green-400 font-medium"
+              >
+                {priceReplacement.replacement}
+              </span>
+            );
+          }
+
+          // Check if this part is a percentage placeholder
+          const percentageReplacement = percentageReplacements.find(pr => pr.original === part);
+          if (percentageReplacement) {
+            const value = parseFloat(percentageReplacement.replacement);
+            const color = value >= 0 ? 'text-green-400' : 'text-red-400';
+            return (
+              <span
+                key={j}
+                className={`${color} font-medium`}
+              >
+                {percentageReplacement.replacement}
+              </span>
+            );
+          }
+          
+          // Regular text
+          return <span key={j}>{part}</span>;
+        })}
       </p>
     );
   });
@@ -2603,7 +2723,7 @@ export default function DashboardPage() {
     }
   };
 
-  // Modify the handleSubmit function to use intent parsing
+  // Modify the handleSubmit function to use Perplexity Sonar API instead of OpenAI
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -2689,59 +2809,132 @@ export default function DashboardPage() {
         userId: profile?.id
       };
 
-      // Make the API call with the context
-      const response = await fetch('/api/chat', {
+      // Create detailed portfolio context for Perplexity
+      const portfolioContext = portfolio.map(item => ({
+        symbol: item.symbol,
+        shares: item.shares,
+        averagePrice: item.average_price,
+        currentPrice: item.current_price,
+        totalValue: item.total_value,
+        gainLoss: item.gain_loss,
+        gainLossPercentage: item.gain_loss_percentage
+      }));
+
+      const marketContext = {
+        isOpen: marketStatus.isOpen,
+        selectedStock,
+        portfolioMetrics: {
+          totalValue: portfolioMetrics.totalValue,
+          dailyReturn: portfolioMetrics.dailyReturn,
+          totalReturn: portfolioMetrics.totalReturn,
+          totalCost: portfolioMetrics.totalCost
+        }
+      };
+
+      // Format the system message with context
+      const systemMessage = `You are SimuTrader CoPilot, an expert financial assistant. You have access to the user's portfolio and market data.
+
+User's Portfolio:
+${portfolioContext.map(item => 
+  `- ${item.symbol}: ${item.shares} shares, avg price $${item.averagePrice?.toFixed(2)}, current price $${item.currentPrice?.toFixed(2)}, P&L: ${item.gainLossPercentage?.toFixed(2)}%`
+).join('\n')}
+
+Portfolio Summary:
+- Total Value: $${marketContext.portfolioMetrics.totalValue.toLocaleString()}
+- Daily Return: ${marketContext.portfolioMetrics.dailyReturn.toFixed(2)}%
+- Total Return: ${marketContext.portfolioMetrics.totalReturn.toFixed(2)}%
+- Cost Basis: $${marketContext.portfolioMetrics.totalCost.toLocaleString()}
+
+Current Selected Stock: ${selectedStock}
+
+Provide helpful, accurate financial advice and analysis. Use the portfolio data to give personalized insights.`;
+
+      // Make direct call to Perplexity Sonar API for financial analysis
+      const response = await fetch('https://api.perplexity.ai/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_PERPLEXITY_API_KEY}`
         },
         body: JSON.stringify({
-          message: userMessage,
-          context
+          model: 'sonar',
+          messages: [
+            {
+              role: 'system',
+              content: systemMessage
+            },
+            {
+              role: 'user',
+              content: userMessage
+            }
+          ],
+          stream: true,
+          temperature: 0.5, // Lower temperature for more focused financial advice
+          max_tokens: 500 , // Increased for more detailed analysis
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to get response');
+        throw new Error(`Perplexity API error: ${response.status}`);
       }
 
-      // Handle streaming response
+      // Handle streaming response with improved parsing
       const reader = response.body?.getReader();
       if (!reader) throw new Error('No reader available');
 
       const decoder = new TextDecoder();
       let accumulatedMessage = '';
+      let buffer = '';
       setThinkingState(null);
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n').filter(line => line.trim() !== '');
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        
+        // Keep the last incomplete line in the buffer
+        buffer = lines.pop() || '';
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            if (data === '[DONE]') continue;
+          const trimmedLine = line.trim();
+          if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
+          
+          const data = trimmedLine.slice(6);
+          if (data === '[DONE]') continue;
+          if (data === '') continue;
 
-            try {
-              const parsed = JSON.parse(data);
-              const content = parsed.choices[0]?.delta?.content || '';
+          try {
+            const parsed = JSON.parse(data);
+            const content = parsed.choices?.[0]?.delta?.content || '';
+            if (content) {
               accumulatedMessage += content;
               setStreamingMessage(accumulatedMessage);
-            } catch (e) {
-              console.error('Error parsing streaming response:', e);
             }
+          } catch (e) {
+            console.warn('Skipping malformed JSON chunk:', data.substring(0, 100) + '...');
+            continue;
           }
         }
       }
 
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: accumulatedMessage,
-        id: generateMessageId()
-      }]);
+      // Ensure we have a response
+      if (accumulatedMessage.trim()) {
+        setMessages(prev => [...prev, { 
+          role: 'assistant', 
+          content: accumulatedMessage,
+          id: generateMessageId()
+        }]);
+      } else {
+        // Fallback if no content was received
+        setMessages(prev => [...prev, { 
+          role: 'assistant', 
+          content: 'I apologize, but I encountered an issue processing your request. Please try again.',
+          id: generateMessageId()
+        }]);
+      }
+      
       setStreamingMessage('');
 
     } catch (error) {
@@ -3267,6 +3460,9 @@ export default function DashboardPage() {
   const formatMessageContentWithAllMovers = (content: string, portfolio: PortfolioItem[], onSelectStock: (symbol: string) => void) => {
     const activeMoverTypes = getActiveMoverTypes();
     
+    // Remove asterisks and hashtags using regex
+    const cleanedContent = content.replace(/[*#]/g, '');
+    
     // Enhanced getStockColor that checks all active mover types
     const getStockColorForAllMovers = (symbol: string) => {
       // Check each active mover type to see if this symbol belongs to it
@@ -3327,14 +3523,30 @@ export default function DashboardPage() {
     const commonWordsPattern = commonWords.join('|');
     const stockRegex = new RegExp(`(?<!${commonWordsPattern})(?<=\\b)([A-Z]{2,5}(?:\\.[A-Z])?)(?=\\b)`, 'g');
     
-    return content.split('\n').map((line, i) => {
-      // Find all unique matches first
-      const matches = Array.from(new Set(line.match(stockRegex) || []));
+    // URL regex to match http/https URLs
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    
+    return cleanedContent.split('\n').map((line, i) => {
+      // First, find and replace URLs
+      const urlMatches = Array.from(line.matchAll(urlRegex));
+      let processedLine = line;
+      const urlReplacements: Array<{ original: string; replacement: string; url: string }> = [];
+      
+      urlMatches.forEach((match, index) => {
+        const url = match[0];
+        const placeholder = `__URL_PLACEHOLDER_${index}__`;
+        urlReplacements.push({ original: placeholder, replacement: placeholder, url });
+        processedLine = processedLine.replace(url, placeholder);
+      });
+      
+      // Find all unique stock symbol matches
+      const matches = Array.from(new Set(processedLine.match(stockRegex) || []));
       
       // Create a map of matches to their positions
       const matchPositions = new Map();
       let match;
-      while ((match = stockRegex.exec(line)) !== null) {
+      const tempRegex = new RegExp(stockRegex.source, stockRegex.flags);
+      while ((match = tempRegex.exec(processedLine)) !== null) {
         if (!matchPositions.has(match[0])) {
           matchPositions.set(match[0], match.index);
         }
@@ -3343,8 +3555,10 @@ export default function DashboardPage() {
       // Sort matches by their position in the text
       matches.sort((a, b) => (matchPositions.get(a) || 0) - (matchPositions.get(b) || 0));
       
-      // Split the line by the matches
-      let parts = [line];
+      // Split the line by the matches and URL placeholders
+      let parts = [processedLine];
+      
+      // Split by stock symbols
       matches.forEach(match => {
         parts = parts.flatMap(part => {
           const split = part.split(match);
@@ -3352,12 +3566,22 @@ export default function DashboardPage() {
         });
       });
       
+      // Split by URL placeholders
+      urlReplacements.forEach(({ original }) => {
+        parts = parts.flatMap(part => {
+          const split = part.split(original);
+          return split.flatMap((p, i) => i === 0 ? [p] : [original, p]);
+        });
+      });
+      
       return (
         <p key={i} className="mb-2 last:mb-0">
-          {parts.map((part, j) => (
-            <span key={j}>
-              {matches.includes(part) ? (
+          {parts.map((part, j) => {
+            // Check if this part is a stock symbol
+            if (matches.includes(part)) {
+              return (
                 <button
+                  key={j}
                   onClick={() => onSelectStock(part)}
                   className="px-1.5 py-0.5 rounded-md font-medium hover:opacity-80 transition-opacity"
                   style={{ 
@@ -3368,11 +3592,28 @@ export default function DashboardPage() {
                 >
                   {part}
                 </button>
-              ) : (
-                part
-              )}
-            </span>
-          ))}
+              );
+            }
+            
+            // Check if this part is a URL placeholder
+            const urlReplacement = urlReplacements.find(ur => ur.original === part);
+            if (urlReplacement) {
+              return (
+                <a
+                  key={j}
+                  href={urlReplacement.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:text-blue-300 underline decoration-blue-400 hover:decoration-blue-300 transition-colors"
+                >
+                  {urlReplacement.url}
+                </a>
+              );
+            }
+            
+            // Regular text
+            return <span key={j}>{part}</span>;
+          })}
         </p>
       );
     });
@@ -4123,14 +4364,37 @@ export default function DashboardPage() {
                           )}
                           {(isLoading && !streamingMessage) || thinkingState ? (
                             <div className="mr-auto max-w-[80%]">
-                              <div className="bg-[#23294a] rounded-xl p-4 text-white">
-                                <div className="flex items-center space-x-2">
-                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                  <span className="animated-thinking-text">
-                                    {thinkingState === 'thinking' && 'Thinking...'}
-                                    {thinkingState === 'reasoning' && 'Reasoning...'}
-                                    {!thinkingState && 'Loading...'}
-                                  </span>
+                              <div className="bg-[#23294a] rounded-xl p-4 text-white relative overflow-hidden">
+                                {/* Modern thinking animation */}
+                                <div className="flex items-center space-x-3">
+                                  <div className="relative">
+                                    <div className="w-8 h-8 rounded-full border-2 border-gray-600 border-t-blue-400 animate-spin"></div>
+                                    <div className="absolute inset-0 w-8 h-8 rounded-full border-2 border-transparent border-r-purple-400 animate-spin animate-reverse" style={{ animationDelay: '0.5s', animationDuration: '1.5s' }}></div>
+                                  </div>
+                                  <div className="flex flex-col">
+                                    <div className="flex items-center space-x-2">
+                                      <span className="text-blue-400 font-semibold text-sm">
+                                        {thinkingState === 'thinking' && 'Analyzing your request'}
+                                        {thinkingState === 'reasoning' && 'Processing market data'}
+                                        {!thinkingState && 'Preparing response'}
+                                      </span>
+                                      <div className="flex space-x-1">
+                                        <div className="w-1 h-1 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                                        <div className="w-1 h-1 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                                        <div className="w-1 h-1 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                                      </div>
+                                    </div>
+                                    <div className="text-xs text-gray-400 mt-1">
+                                      {thinkingState === 'thinking' && 'Understanding your portfolio context...'}
+                                      {thinkingState === 'reasoning' && 'Fetching real-time market insights...'}
+                                      {!thinkingState && 'Finalizing recommendations...'}
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                {/* Subtle background animation */}
+                                <div className="absolute inset-0 opacity-10">
+                                  <div className="absolute inset-0 bg-gradient-to-r from-blue-500 via-purple-500 to-blue-500 animate-pulse"></div>
                                 </div>
                               </div>
                             </div>
