@@ -1291,6 +1291,8 @@ export default function DashboardPage() {
   }, [portfolio, portfolioPage, selectedStock]);
   const [apiCallsState, setApiCallsState] = useState<APICall[]>([]);
   const [portfolioHistoryLoading, setPortfolioHistoryLoading] = useState(true);
+  const [portfolioNews, setPortfolioNews] = useState<NewsItem[]>([]);
+  const [portfolioNewsLoading, setPortfolioNewsLoading] = useState(true);
 
   // Initialize with demo data immediately for better UX
   useEffect(() => {
@@ -3846,6 +3848,88 @@ Provide helpful, accurate financial advice and analysis. Use the portfolio data 
     }
   }, [profile?.id, portfolio.length]); // Removed portfolioHistoryTimeframe dependency
 
+  // Effect to fetch portfolio news when portfolio changes
+  useEffect(() => {
+    if (portfolio.length > 0) {
+      fetchPortfolioNews();
+    } else {
+      setPortfolioNews([]);
+      setPortfolioNewsLoading(false);
+    }
+  }, [portfolio.length, portfolio.map(p => p.symbol).join(',')]);
+
+  // Add this new function for fetching portfolio-related news
+  const fetchPortfolioNews = async (showAllHoldings: boolean = false) => {
+    if (portfolio.length === 0) {
+      setPortfolioNews([]);
+      setPortfolioNewsLoading(false);
+      return;
+    }
+
+    setPortfolioNewsLoading(true);
+    addApiCall('portfolio-news');
+
+    try {
+      // Get holdings to fetch news for
+      const holdingsToFetch = showAllHoldings 
+        ? portfolio.map(item => item.symbol)
+        : portfolio
+            .sort((a, b) => (b.total_value || 0) - (a.total_value || 0))
+            .slice(0, 3)
+            .map(item => item.symbol);
+      
+      // Fetch news for each holding
+      const newsPromises = holdingsToFetch.map(async (ticker) => {
+        const response = await fetch(
+          `https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers=${ticker}&apikey=${process.env.NEXT_PUBLIC_ALPHA_VANTAGE_KEY}&limit=5`
+        );
+        
+        if (!response.ok) {
+          console.error(`Failed to fetch news for ${ticker}`);
+          return [];
+        }
+        
+        const data = await response.json();
+        return data.feed || [];
+      });
+      
+      // Wait for all news fetches to complete
+      const allNews = await Promise.all(newsPromises);
+      
+      // Flatten and process the news items
+      const processedNews = allNews
+        .flat()
+        .map((item: any) => ({
+          title: item.title,
+          summary: item.summary,
+          url: item.url,
+          sentiment: item.overall_sentiment_label?.toLowerCase() || 'neutral',
+          tickers: item.ticker_sentiment?.map((ts: any) => ts.ticker) || [],
+          topics: item.topics?.map((topic: any) => topic.topic) || [],
+          source: item.source,
+          time: item.time_published,
+          image: item.banner_image
+        }))
+        // Remove duplicates based on URL
+        .filter((item, index, self) => 
+          index === self.findIndex((t) => t.url === item.url)
+        )
+        // Sort by time published (newest first)
+        .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
+        // Take top 10 most recent articles
+        .slice(0, 10);
+
+      setPortfolioNews(processedNews);
+      updateApiCall('portfolio-news', 'success');
+    } catch (error) {
+      console.error('Error fetching portfolio news:', error);
+      setPortfolioNews([]);
+      updateApiCall('portfolio-news', 'error');
+    } finally {
+      setPortfolioNewsLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-black">
@@ -4028,9 +4112,147 @@ Provide helpful, accurate financial advice and analysis. Use the portfolio data 
           </div>
 
           {/* Portfolio Performance and Stock Info Row */}
-          <div className="w-full flex flex-row gap-8 mt-4">
-            {/* Portfolio Stock Info List */}
-            <div className="flex flex-col w-1/2 max-w-[400px] mx-auto">
+          <div className="w-full flex flex-row gap-6 mt-4">
+            {/* Portfolio News Section - Narrowest */}
+            <div className="flex flex-col w-1/4 min-w-[280px]">
+              <div className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-xl rounded-3xl border border-gray-700/50 p-6 h-[394px] flex flex-col shadow-2xl hover:border-gray-600/50 transition-all duration-500 animate-slideUp">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 bg-gradient-to-r from-green-400 to-emerald-400 rounded-full animate-pulse"></div>
+                    <h3 className="text-xl font-bold bg-gradient-to-r from-white via-green-100 to-green-200 bg-clip-text text-transparent">Your News</h3>
+                  </div>
+                  <button
+                    onClick={() => fetchPortfolioNews(true)}
+                    className="p-1.5 bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-600 hover:to-gray-700 text-white rounded-xl transition-all duration-300 transform hover:scale-110 active:scale-95 shadow-lg"
+                    title="Show news from all holdings"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </button>
+                </div>
+                
+                {/* News List Container */}
+                <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                  <div className="space-y-3 pr-1">
+                    {portfolioNewsLoading ? (
+                      <div className="text-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400 mx-auto mb-3"></div>
+                        <span className="text-sm text-gray-400">Loading portfolio news...</span>
+                      </div>
+                    ) : portfolioNews.length === 0 ? (
+                      <div className="text-center py-8">
+                        <div className="text-gray-400 mb-2">📰</div>
+                        <div className="text-gray-400 text-sm">No news for holdings</div>
+                        <div className="text-gray-500 text-xs mt-1">News will appear as your portfolio grows</div>
+                      </div>
+                    ) : (
+                      portfolioNews.map((article, index) => {
+                        const sentimentColors = {
+                          bullish: 'text-green-400 bg-green-500/10 border-green-500/30',
+                          somewhat_bullish: 'text-green-300 bg-green-500/10 border-green-500/20',
+                          neutral: 'text-gray-300 bg-gray-500/10 border-gray-500/30',
+                          somewhat_bearish: 'text-orange-300 bg-orange-500/10 border-orange-500/20',
+                          bearish: 'text-red-400 bg-red-500/10 border-red-500/30'
+                        };
+
+                        // Get all tickers mentioned in the article
+                        const allTickers = article.tickers;
+                        
+                        // Separate portfolio and non-portfolio tickers
+                        const portfolioTickers = allTickers.filter(ticker => 
+                          portfolio.some(item => item.symbol === ticker)
+                        );
+                        
+                        const otherTickers = allTickers.filter(ticker => 
+                          !portfolio.some(item => item.symbol === ticker)
+                        );
+
+                        // Generate unique colors for each ticker
+                        const getTickerColor = (ticker: string) => {
+                          const colors = [
+                            'text-blue-400 bg-blue-500/10 border-blue-500/30',
+                            'text-purple-400 bg-purple-500/10 border-purple-500/30',
+                            'text-green-400 bg-green-500/10 border-green-500/30',
+                            'text-yellow-400 bg-yellow-500/10 border-yellow-500/30',
+                            'text-pink-400 bg-pink-500/10 border-pink-500/30',
+                            'text-indigo-400 bg-indigo-500/10 border-indigo-500/30',
+                            'text-red-400 bg-red-500/10 border-red-500/30',
+                            'text-orange-400 bg-orange-500/10 border-orange-500/30'
+                          ];
+                          
+                          // Use the ticker symbol to generate a consistent color
+                          const hash = ticker.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                          return colors[hash % colors.length];
+                        };
+                        
+                        return (
+                          <div 
+                            key={index}
+                            className="bg-gradient-to-r from-gray-700/40 to-gray-800/40 backdrop-blur-sm rounded-2xl border border-gray-600/30 p-3 hover:border-gray-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-gray-500/10 cursor-pointer group transform hover:scale-[1.02]"
+                            onClick={() => window.open(article.url, '_blank')}
+                          >
+                            {/* All Tickers */}
+                            <div className="flex flex-wrap gap-1 mb-2">
+                              {allTickers.map(ticker => (
+                                <span 
+                                  key={ticker}
+                                  className={`px-2 py-1 rounded-full text-xs font-medium border ${getTickerColor(ticker)}`}
+                                >
+                                  {ticker}
+                                </span>
+                              ))}
+                            </div>
+                            
+                            {/* Title */}
+                            <h4 className="text-sm font-semibold text-white mb-2 leading-tight group-hover:text-blue-300 transition-colors line-clamp-3">
+                              {article.title}
+                            </h4>
+                            
+                            {/* Footer */}
+                            <div className="flex items-center justify-between">
+                              <span className={`px-2 py-1 rounded-lg text-xs font-medium border ${
+                                sentimentColors[article.sentiment as keyof typeof sentimentColors] || sentimentColors.neutral
+                              }`}>
+                                {article.sentiment}
+                              </span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.open(article.url, '_blank');
+                                }}
+                                className="group/visit relative px-3 py-1 rounded-lg text-xs font-medium bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-600 hover:to-gray-700 text-gray-300 hover:text-white transition-all duration-300 overflow-hidden"
+                              >
+                                <span className="relative z-10 flex items-center gap-1">
+                                  Visit
+                                  <svg 
+                                    className="w-3 h-3 transform group-hover/visit:translate-x-1 transition-transform duration-300" 
+                                    fill="none" 
+                                    stroke="currentColor" 
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path 
+                                      strokeLinecap="round" 
+                                      strokeLinejoin="round" 
+                                      strokeWidth={2} 
+                                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" 
+                                    />
+                                  </svg>
+                                </span>
+                                <span className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 opacity-0 group-hover/visit:opacity-100 transition-opacity duration-300"></span>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Portfolio Stock Info List - Medium width */}
+            <div className="flex flex-col w-1/3 min-w-[320px]">
               <div className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-xl rounded-3xl border border-gray-700/50 p-6 h-[394px] flex flex-col shadow-2xl hover:border-gray-600/50 transition-all duration-500 animate-slideUp">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-3 h-3 bg-gradient-to-r from-purple-400 to-pink-400 rounded-full animate-pulse"></div>
@@ -4149,13 +4371,14 @@ Provide helpful, accurate financial advice and analysis. Use the portfolio data 
                 )}
               </div>
             </div>
-            {/* Portfolio Performance Graph on the right */}
-            <div className="flex-1 flex justify-end">
-              <div className="w-full max-w-xl bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-xl rounded-3xl border border-gray-700/50 p-6 shadow-2xl hover:border-gray-600/50 transition-all duration-500 animate-slideUp">
+
+            {/* Portfolio Performance Graph - Widest */}
+            <div className="flex-1 min-w-[400px]">
+              <div className="w-full bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-xl rounded-3xl border border-gray-700/50 p-6 h-[394px] shadow-2xl hover:border-gray-600/50 transition-all duration-500 animate-slideUp">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <div className="w-3 h-3 bg-gradient-to-r from-green-400 to-emerald-400 rounded-full animate-pulse"></div>
-                    <h3 className="text-xl font-bold bg-gradient-to-r from-white via-green-100 to-green-200 bg-clip-text text-transparent">Portfolio Performance Since First Purchase</h3>
+                    <h3 className="text-xl font-bold bg-gradient-to-r from-white via-green-100 to-green-200 bg-clip-text text-transparent">Portfolio Performance</h3>
                   </div>
                 </div>
                 <div className="h-[300px] relative">
@@ -4225,27 +4448,6 @@ Provide helpful, accurate financial advice and analysis. Use the portfolio data 
                       </div>
                     </div>
                   )}
-                </div>
-                {/* Performance Stats */}
-                <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-700/30">
-                  <div className="text-center">
-                    <p className="text-xs text-gray-400 mb-1">Period Return</p>
-                    <p className={`text-sm font-bold ${portfolioMetrics.totalReturn >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {portfolioMetrics.totalReturn >= 0 ? '+' : ''}{portfolioMetrics.totalReturn.toFixed(2)}%
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-gray-400 mb-1">Daily Change</p>
-                    <p className={`text-sm font-bold ${portfolioMetrics.dailyReturn >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {portfolioMetrics.dailyReturn >= 0 ? '+' : ''}{portfolioMetrics.dailyReturn.toFixed(2)}%
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-gray-400 mb-1">Current Value</p>
-                    <p className="text-sm font-bold text-white">
-                      ${portfolioMetrics.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </p>
-                  </div>
                 </div>
               </div>
             </div>
