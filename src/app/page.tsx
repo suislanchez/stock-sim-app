@@ -12,6 +12,7 @@ export default function LoginPage() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [visibleSections, setVisibleSections] = useState<Set<number>>(new Set());
   const [visibleElements, setVisibleElements] = useState<Set<string>>(new Set());
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   
   const sectionRefs = useRef<(HTMLElement | null)[]>([]);
   const elementRefs = useRef<{ [key: string]: HTMLElement | null }>({});
@@ -66,13 +67,26 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const { data, error } = isSignUp
-        ? await supabase.auth.signUp({ email, password })
-        : await supabase.auth.signInWithPassword({ email, password });
+      if (isSignUp) {
+        const { data, error } = await supabase.auth.signUp({ 
+          email, 
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`
+          }
+        });
 
-      if (error) throw error;
+        if (error) throw error;
 
-      router.push("/dashboard");
+        // Show success message for signup
+        setError(null);
+        setSuccessMessage("Please check your email for the confirmation link to complete your registration.");
+        return; // Don't redirect, let user see the success message
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        router.push("/dashboard");
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -323,6 +337,12 @@ export default function LoginPage() {
               {error && (
                 <div className="bg-red-900/50 border border-red-700/50 rounded-lg p-3">
                   <p className="text-red-400 text-sm">{error}</p>
+                </div>
+              )}
+
+              {successMessage && (
+                <div className="bg-green-900/50 border border-green-700/50 rounded-lg p-3">
+                  <p className="text-green-400 text-sm">{successMessage}</p>
                 </div>
               )}
 
