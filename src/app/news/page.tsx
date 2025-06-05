@@ -300,7 +300,7 @@ export default function NewsPage() {
     };
 
     fetchNews();
-  }, [selectedCategory, profile?.id]);
+  }, [selectedCategory, profile?.id, categories]);
 
   // Filter news based on search
   useEffect(() => {

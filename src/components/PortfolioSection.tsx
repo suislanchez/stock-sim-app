@@ -268,7 +268,7 @@ export default function PortfolioSection({ profile }: PortfolioSectionProps) {
     };
 
     fetchPortfolio();
-  }, [profile?.id]);
+  }, [profile?.id, stockSectorMap]);
 
   if (loading) {
     return (

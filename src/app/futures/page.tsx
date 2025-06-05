@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { futuresApi, FuturesApiData } from '@/lib/futuresApi';
 import { supabase } from '@/lib/supabaseClient';
@@ -155,6 +155,8 @@ const FuturesPage: React.FC = () => {
   // Add state for pending limit orders
   const [pendingOrders, setPendingOrders] = useState<PendingOrder[]>([]);
 
+  const pathname = usePathname();
+
   useEffect(() => {
     loadFuturesData();
     
@@ -303,10 +305,10 @@ const FuturesPage: React.FC = () => {
     };
 
     checkAndExecutePendingOrders();
-  }, [futuresData, pendingOrders]);
+  }, [futuresData, pendingOrders]); // Remove executeLimitOrder from dependencies
 
   // Function to execute a limit order
-  const executeLimitOrder = async (order: PendingOrder) => {
+  const executeLimitOrder = useCallback(async (order: PendingOrder) => {
     if (!profile) return;
 
     try {
@@ -371,7 +373,7 @@ const FuturesPage: React.FC = () => {
     } catch (error) {
       console.error('Error executing limit order:', error);
     }
-  };
+  }, [profile]);
 
   const loadFuturesData = async () => {
     try {
@@ -1078,49 +1080,49 @@ ${latestData.map(contract =>
             </div>
           </div>
           <div className="p-2 space-y-4">
-            <a href="/dashboard" className={`${usePathname()=== '/dashboard' ? 'text-white bg-gray-800/80 scale-110' : 'text-gray-300 hover:text-white hover:scale-105'} rounded-lg transition-all duration-300 ease-in-out flex flex-col items-center gap-1 p-2`}>
+            <a href="/dashboard" className={`${pathname === '/dashboard' ? 'text-white bg-gray-800/80 scale-110' : 'text-gray-300 hover:text-white hover:scale-105'} rounded-lg transition-all duration-300 ease-in-out flex flex-col items-center gap-1 p-2`}>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
               </svg>
               <span className="text-xs">Dashboard</span>
             </a>
-            <a href="/futures" className={`${usePathname()=== '/futures' ? 'text-white bg-gray-800/80 scale-110' : 'text-gray-300 hover:text-white hover:scale-105'} rounded-lg transition-all duration-300 ease-in-out flex flex-col items-center gap-1 p-2`}>
+            <a href="/futures" className={`${pathname === '/futures' ? 'text-white bg-gray-800/80 scale-110' : 'text-gray-300 hover:text-white hover:scale-105'} rounded-lg transition-all duration-300 ease-in-out flex flex-col items-center gap-1 p-2`}>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
               <span className="text-xs">Futures</span>
             </a>
-            <a href="/orders" className={`${usePathname()=== '/orders' ? 'text-white bg-gray-800/80 scale-110' : 'text-gray-300 hover:text-white hover:scale-105'} rounded-lg transition-all duration-300 ease-in-out flex flex-col items-center gap-1 p-2`}>
+            <a href="/orders" className={`${pathname === '/orders' ? 'text-white bg-gray-800/80 scale-110' : 'text-gray-300 hover:text-white hover:scale-105'} rounded-lg transition-all duration-300 ease-in-out flex flex-col items-center gap-1 p-2`}>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
               <span className="text-xs">Orders</span>
             </a>
-            <a href="/watchlist" className={`${usePathname() === '/watchlist' ? 'text-white bg-gray-800/80 scale-110' : 'text-gray-300 hover:text-white hover:scale-105'} rounded-lg transition-all duration-300 ease-in-out flex flex-col items-center gap-1 p-2`}>
+            <a href="/watchlist" className={`${pathname === '/watchlist' ? 'text-white bg-gray-800/80 scale-110' : 'text-gray-300 hover:text-white hover:scale-105'} rounded-lg transition-all duration-300 ease-in-out flex flex-col items-center gap-1 p-2`}>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
               </svg>
               <span className="text-xs">Watchlist</span>
             </a>
-            <a href="/taxes" className={`${usePathname() === '/taxes' ? 'text-white bg-gray-800/80 scale-110' : 'text-gray-300 hover:text-white hover:scale-105'} rounded-lg transition-all duration-300 ease-in-out flex flex-col items-center gap-1 p-2`}>
+            <a href="/taxes" className={`${pathname === '/taxes' ? 'text-white bg-gray-800/80 scale-110' : 'text-gray-300 hover:text-white hover:scale-105'} rounded-lg transition-all duration-300 ease-in-out flex flex-col items-center gap-1 p-2`}>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
               </svg>
               <span className="text-xs">Taxes</span>
             </a>
-            <a href="/news" className={`${usePathname() === '/news' ? 'text-white bg-gray-800/80 scale-110' : 'text-gray-300 hover:text-white hover:scale-105'} rounded-lg transition-all duration-300 ease-in-out flex flex-col items-center gap-1 p-2`}>
+            <a href="/news" className={`${pathname === '/news' ? 'text-white bg-gray-800/80 scale-110' : 'text-gray-300 hover:text-white hover:scale-105'} rounded-lg transition-all duration-300 ease-in-out flex flex-col items-center gap-1 p-2`}>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21H5a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2z" />
               </svg>
               <span className="text-xs">News</span>
             </a>
-            <a href="/education" className={`${usePathname()=== '/education' ? 'text-white bg-gray-800/80 scale-110' : 'text-gray-300 hover:text-white hover:scale-105'} rounded-lg transition-all duration-300 ease-in-out flex flex-col items-center gap-1 p-2`}>
+            <a href="/education" className={`${pathname === '/education' ? 'text-white bg-gray-800/80 scale-110' : 'text-gray-300 hover:text-white hover:scale-105'} rounded-lg transition-all duration-300 ease-in-out flex flex-col items-center gap-1 p-2`}>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5zm0 7v-6m0 0l-7-4m7 4l7-4" />
               </svg>
               <span className="text-xs">Learn</span>
             </a>
-            <a href="/portfolio" className={`${usePathname() === '/portfolio' ? 'text-white bg-gray-800/80 scale-110' : 'text-gray-300 hover:text-white hover:scale-105'} rounded-lg transition-all duration-300 ease-in-out flex flex-col items-center gap-1 p-2`}>
+            <a href="/portfolio" className={`${pathname === '/portfolio' ? 'text-white bg-gray-800/80 scale-110' : 'text-gray-300 hover:text-white hover:scale-105'} rounded-lg transition-all duration-300 ease-in-out flex flex-col items-center gap-1 p-2`}>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
                 <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
