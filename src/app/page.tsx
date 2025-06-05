@@ -78,10 +78,9 @@ export default function LoginPage() {
 
         if (error) throw error;
 
-        // Show success message for signup
-        setError(null);
-        setSuccessMessage("Please check your email for the confirmation link to complete your registration.");
-        return; // Don't redirect, let user see the success message
+        // Redirect to confirmation page instead of showing message
+        router.push("/auth/confirmation");
+        return;
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
