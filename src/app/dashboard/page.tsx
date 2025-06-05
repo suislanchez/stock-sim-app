@@ -1838,13 +1838,16 @@ export default function DashboardPage() {
           marketData: detailedData.marketData,
           splitCoefficient: detailedData.splitCoefficient,
           history: detailedData.history,
-          technicalIndicators
+          technicalIndicators: technicalIndicators // Ensure technical indicators are included
         };
         
         setStocks(prev => ({
           ...prev,
           [symbol]: updatedStock
         }));
+        
+        // Update stockData state with the new data
+        setStockData(updatedStock);
       }
 
       // Scroll to the graph section
@@ -3556,13 +3559,13 @@ Provide helpful, accurate financial advice and analysis. Use the portfolio data 
     let query = '';
     switch (queryType) {
       case 'news':
-        query = `What's the latest news about ${selectedStock}? Analyze recent developments and sentiment.`;
+        query = `What's the latest news about ${selectedStock}? Analyze recent developments and sentiment. Include full URLs for sources.`;
         break;
       case 'metrics':
-        query = `Analyze the recent financial metrics and performance indicators for ${selectedStock}. Include key ratios and trends.`;
+        query = `Analyze the recent financial metrics and performance indicators for ${selectedStock}. Include key ratios and trends. Include full URLs for sources.`;
         break;
       case 'similar':
-        query = `Find stocks similar to ${selectedStock}. Show companies in the same sector with comparable metrics and performance.`;
+        query = `Find stocks similar to ${selectedStock}. Show companies in the same sector with comparable metrics and performance. Include full URLs for sources.`;
         break;
     }
 
@@ -3594,20 +3597,34 @@ Provide helpful, accurate financial advice and analysis. Use the portfolio data 
         userId: profile?.id
       };
 
-      // Make the API call with the context
-      const response = await fetch('/api/chat', {
+      // Make direct call to Perplexity Sonar API
+      const response = await fetch('https://api.perplexity.ai/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_PERPLEXITY_API_KEY}`
         },
         body: JSON.stringify({
-          message: query,
-          context
+          model: 'sonar',
+          messages: [
+            {
+              role: 'system',
+              content: `You are SimuTrader CoPilot, an expert financial assistant. You have access to the user's portfolio and market data. Always include full URLs for any sources you reference.`
+            },
+            {
+              role: 'user',
+              content: query
+            }
+          ],
+          stream: true,
+          temperature: 0.5,
+          max_tokens: 500,
+          enable_sources: true
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to get response');
+        throw new Error(`Perplexity API error: ${response.status}`);
       }
 
       // Handle streaming response
@@ -3616,7 +3633,8 @@ Provide helpful, accurate financial advice and analysis. Use the portfolio data 
 
       const decoder = new TextDecoder();
       let accumulatedMessage = '';
-      setThinkingState(null);
+      let accumulatedSources: Array<{ name: string; url: string }> = [];
+      let buffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -3635,11 +3653,23 @@ Provide helpful, accurate financial advice and analysis. Use the portfolio data 
               const content = parsed.choices[0]?.delta?.content || '';
               accumulatedMessage += content;
               setStreamingMessage(accumulatedMessage);
+
+              // Handle sources if present
+              if (parsed.choices[0]?.delta?.sources) {
+                accumulatedSources = parsed.choices[0].delta.sources;
+              }
             } catch (e) {
               console.error('Error parsing streaming response:', e);
             }
           }
         }
+      }
+
+      // Add sources to the message if available
+      if (accumulatedSources.length > 0) {
+        accumulatedMessage += '\n\nSources:\n' + accumulatedSources.map(source => 
+          `${source.name}: ${source.url}`
+        ).join('\n');
       }
 
       setMessages(prev => [...prev, { 
