@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { fetchStock, fetchMultipleStocks } from "../../lib/fetchStock";
 import {
   XAxis,
@@ -857,41 +857,41 @@ const PortfolioPieChart = ({ portfolio, loading }: { portfolio: PortfolioItem[],
   const onPieLeave = () => {
     setActiveIndex(-1);
   };
-
-  return (
+      
+      return (
     <div className="flex items-center justify-start">
       <div className="w-[12rem] h-[12rem] flex-shrink-0">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={data}
-              cx="50%"
-              cy="50%"
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={data}
+            cx="50%"
+            cy="50%"
               innerRadius={45}
               outerRadius={90}
-              paddingAngle={2}
-              dataKey="value"
-              onMouseEnter={onPieEnter}
-              onMouseLeave={onPieLeave}
+            paddingAngle={2}
+            dataKey="value"
+            onMouseEnter={onPieEnter}
+            onMouseLeave={onPieLeave}
               animationBegin={0}
               animationDuration={1000}
               animationEasing="ease-out"
-            >
-              {data.map((entry, index) => (
-                <Cell 
-                  key={`cell-${index}`} 
-                  fill={entry.color}
-                  stroke={activeIndex === index ? "#fff" : "none"}
-                  strokeWidth={activeIndex === index ? 2 : 0}
-                  style={{
-                    filter: activeIndex === index ? 'brightness(1.1)' : 'none',
-                    transform: activeIndex === index ? 'scale(1.05)' : 'scale(1)',
-                    transformOrigin: 'center',
-                    transition: 'all 0.2s ease-in-out'
-                  }}
-                />
-              ))}
-            </Pie>
+          >
+            {data.map((entry, index) => (
+              <Cell 
+                key={`cell-${index}`} 
+                fill={entry.color}
+                stroke={activeIndex === index ? "#fff" : "none"}
+                strokeWidth={activeIndex === index ? 2 : 0}
+                style={{
+                  filter: activeIndex === index ? 'brightness(1.1)' : 'none',
+                  transform: activeIndex === index ? 'scale(1.05)' : 'scale(1)',
+                  transformOrigin: 'center',
+                  transition: 'all 0.2s ease-in-out'
+                }}
+              />
+            ))}
+          </Pie>
             <text
               x="50%"
               y="50%"
@@ -900,7 +900,7 @@ const PortfolioPieChart = ({ portfolio, loading }: { portfolio: PortfolioItem[],
               className="text-white text-base font-bold"
               fill="#FFFFFF"
             >
-              ${totalValue.toLocaleString()}
+              ${totalValue.toFixed(2)}
             </text>
             <Tooltip
               contentStyle={{
@@ -908,15 +908,26 @@ const PortfolioPieChart = ({ portfolio, loading }: { portfolio: PortfolioItem[],
                 border: 'none',
                 borderRadius: '0.75rem',
                 color: '#fff',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
-              }}
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                position: 'relative',
+                right: '100px',
+                }}
               formatter={(value: number, name: string, props: any) => [
-                `$${value.toLocaleString()}`,
-                `${name} (${props.payload.shares} shares)`
+                <div className="text-white">
+                  <div className="font-semibold">${value.toFixed(2)}</div>
+                  <div className="text-sm">{name}</div>
+                  <div className="text-sm">{props.payload.shares} shares</div>
+                  {props.payload.gainLossPercentage && (
+                    <div className={`text-sm ${props.payload.gainLossPercentage >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {props.payload.gainLossPercentage >= 0 ? '+' : ''}{props.payload.gainLossPercentage.toFixed(2)}%
+                    </div>
+                  )}
+                </div>,
+                ''
               ]}
             />
-          </PieChart>
-        </ResponsiveContainer>
+        </PieChart>
+      </ResponsiveContainer>
       </div>
       <div className="ml-6 space-y-0.5 min-w-[2px] flex flex-col">
         <div className="flex items-center mb-1">
@@ -1231,6 +1242,7 @@ const fetchMarketMovers = async () => {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const graphRef = useRef<HTMLDivElement>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -4156,163 +4168,86 @@ Provide helpful, accurate financial advice and analysis. Use the portfolio data 
   return (
     <div className={`flex min-h-screen font-sans ${isCryptoMode ? 'bg-gray-900' : 'bg-black'}`}>
       {/* Side Navigation */}
-      <nav className="w-48 bg-gray-900/95 backdrop-blur-sm border-r border-gray-800/50 fixed h-full flex flex-col justify-between">
+      <nav className="w-20 bg-gray-900/95 backdrop-blur-sm border-r border-gray-800/50 fixed h-full flex flex-col justify-between">
         <div>
-          <div className="p-3 border-b border-gray-800/50">
+          <div className="p-4 border-b border-gray-800/50">
             <div className="flex items-center">
-              <img src="/logo.png" alt="SimuTrader Logo" className="w-12 h-12 rounded-full mr-2" />
-              <span className="text-xl font-bold bg-gradient-to-r from-white via-gray-200 to-gray-300 bg-clip-text text-transparent relative">
-                <span className="relative z-10">SimuTrader</span>
-              </span>
+              <div className="relative">
+                <img src="/logo.png" alt="SimuTrader Logo" className="w-14 h-12 rounded-full" />
+                <span className="absolute -top-0 -right-1 text-[18px] text-white font-bold">®</span>
+              </div>
             </div>
           </div>
-          <div className="p-3 space-y-1">
-            <a href="/dashboard" className="text-gray-300 hover:text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200 flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="p-2 space-y-4">
+            <a href="/dashboard" className={`${pathname === '/dashboard' ? 'text-white bg-gray-800/80 scale-110' : 'text-gray-300 hover:text-white hover:scale-105'} rounded-lg transition-all duration-300 ease-in-out flex flex-col items-center gap-1 p-2`}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
               </svg>
-              Dashboard
+              <span className="text-xs">Dashboard</span>
             </a>
-            <a href="/futures" className="text-gray-300 hover:text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200 flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <a href="/futures" className={`${pathname === '/futures' ? 'text-white bg-gray-800/80 scale-110' : 'text-gray-300 hover:text-white hover:scale-105'} rounded-lg transition-all duration-300 ease-in-out flex flex-col items-center gap-1 p-2`}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
-              Futures
+              <span className="text-xs">Futures</span>
             </a>
-            <a href="/orders" className="text-gray-300 hover:text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200 flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <a href="/orders" className={`${pathname === '/orders' ? 'text-white bg-gray-800/80 scale-110' : 'text-gray-300 hover:text-white hover:scale-105'} rounded-lg transition-all duration-300 ease-in-out flex flex-col items-center gap-1 p-2`}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
-              Orders
+              <span className="text-xs">Orders</span>
             </a>
-            <a href="/watchlist" className="text-gray-300 hover:text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200 flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <a href="/watchlist" className={`${pathname === '/watchlist' ? 'text-white bg-gray-800/80 scale-110' : 'text-gray-300 hover:text-white hover:scale-105'} rounded-lg transition-all duration-300 ease-in-out flex flex-col items-center gap-1 p-2`}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
               </svg>
-              Watchlist
+              <span className="text-xs">Watchlist</span>
             </a>
-            <a href="/taxes" className="text-gray-300 hover:text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200 flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <a href="/taxes" className={`${pathname === '/taxes' ? 'text-white bg-gray-800/80 scale-110' : 'text-gray-300 hover:text-white hover:scale-105'} rounded-lg transition-all duration-300 ease-in-out flex flex-col items-center gap-1 p-2`}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
               </svg>
-              Taxes
+              <span className="text-xs">Taxes</span>
             </a>
-            <a href="/news" className="text-gray-300 hover:text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200 flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <a href="/news" className={`${pathname === '/news' ? 'text-white bg-gray-800/80 scale-110' : 'text-gray-300 hover:text-white hover:scale-105'} rounded-lg transition-all duration-300 ease-in-out flex flex-col items-center gap-1 p-2`}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21H5a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2z" />
               </svg>
-              News
+              <span className="text-xs">News</span>
             </a>
-            <a href="/education" className="text-gray-300 hover:text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200 flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <a href="/education" className={`${pathname === '/education' ? 'text-white bg-gray-800/80 scale-110' : 'text-gray-300 hover:text-white hover:scale-105'} rounded-lg transition-all duration-300 ease-in-out flex flex-col items-center gap-1 p-2`}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5zm0 7v-6m0 0l-7-4m7 4l7-4" />
               </svg>
-              Education
+              <span className="text-xs">Learn</span>
             </a>
-            <a href="/portfolio" className={`${isCryptoMode ? 'crypto-text' : 'text-gray-300'} hover:text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200 flex items-center gap-2`}>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <a href="/portfolio" className={`${pathname === '/portfolio' ? 'text-white bg-gray-800/80 scale-110' : 'text-gray-300 hover:text-white hover:scale-105'} rounded-lg transition-all duration-300 ease-in-out flex flex-col items-center gap-1 p-2`}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
                 <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
                 <line x1="12" y1="22.08" x2="12" y2="12"/>
               </svg>
-              Portfolio
+              <span className="text-xs">Portfolio</span>
             </a>
+      
           </div>
         </div>
-        {/* Bottom Left Section */}
-        <div className="p-3 border-t border-gray-800/50 flex flex-col gap-3">
-          <button 
-            onClick={() => setShowAccountModal(true)}
-            className="text-gray-200 hover:text-white text-base flex items-center gap-3 px-3 py-3 rounded-lg bg-gray-800/80 transition-all group"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="p-2 space-y-4 border-t border-gray-800/50">
+          <button onClick={handleUpdateName} className="text-gray-300 hover:text-white rounded-lg transition-all duration-200 flex flex-col items-center gap-1 w-full">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
-            Account
           </button>
-          <button 
-            onClick={handleLogout}
-            disabled={isLoggingOut}
-            className="text-gray-200 hover:text-white text-base flex items-center gap-3 px-3 py-3 rounded-lg bg-gray-800/80 transition-all group"
-          >
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              className="h-6 w-6 transform transition-transform duration-300 group-hover:translate-x-1" 
-              fill="none" 
-              viewBox="0 0 24 24" 
-              stroke="currentColor"
-            >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth="2" 
-                d="M17 16l4-4m0 0l-4-4m4 4H7" 
-              />
+          <button onClick={handleLogout} className="text-gray-300 hover:text-white rounded-lg transition-all duration-200 flex flex-col items-center gap-1 w-full">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
-            {isLoggingOut ? 'Logging out...' : 'Log out'}
           </button>
         </div>
-
-        {/* Account Modal */}
-        {showAccountModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="bg-gray-800 rounded-lg p-3 w-[240px] mx-4 border border-gray-700/50">
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="text-sm font-medium text-white">Account Settings</h3>
-                <button
-                  onClick={() => setShowAccountModal(false)}
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              
-              <div className="space-y-2">
-                <div>
-                  <label className="block text-gray-300 text-xs font-medium mb-1">
-                    Display Name
-                  </label>
-                  <input
-                    type="text"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    className="w-full bg-gray-700/50 border border-gray-600/50 rounded-md px-2 py-1.5 text-sm text-white placeholder-gray-400 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all"
-                    placeholder="Enter name"
-                  />
-                </div>
-                
-                <div className="flex justify-end gap-2 mt-3">
-                  <button
-                    onClick={() => setShowAccountModal(false)}
-                    className="px-2 py-1 text-xs text-gray-300 hover:text-white transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleUpdateName}
-                    disabled={isUpdatingName}
-                    className="px-2 py-1 text-xs bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                  >
-                    {isUpdatingName ? (
-                      <>
-                        <div className="animate-spin rounded-full h-2.5 w-2.5 border-b-2 border-white"></div>
-                        <span>Saving...</span>
-                      </>
-                    ) : (
-                      'Save'
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </nav>
 
       {/* Main Content */}
-      <div className="flex-1 ml-48 h-screen overflow-y-auto">
+      <div className="flex-1 ml-20">
         {/* Market Ticker */}
    
  
@@ -4709,8 +4644,9 @@ Provide helpful, accurate financial advice and analysis. Use the portfolio data 
                             backgroundColor: '#1F2937',
                             border: 'none',
                             borderRadius: '0.75rem',
-                            color: '#fff',
+                            color: 'white',
                             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+                        
                           }}
                           formatter={(value: number) => [`$${value.toFixed(2)}`, 'Portfolio Value']}
                         />

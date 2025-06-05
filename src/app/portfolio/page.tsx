@@ -70,7 +70,9 @@ const PortfolioChart = ({ portfolio, loading }: { portfolio: PortfolioItem[], lo
     name: item.symbol,
     value: item.market_value || 0,
     shares: item.shares,
-    color: COLORS[index % COLORS.length]
+    color: COLORS[index % COLORS.length],
+    gainLoss: item.gain_loss || 0,
+    gainLossPercentage: item.gain_loss_percentage || 0
   }));
 
   const onPieEnter = (_: any, index: number) => {
@@ -79,6 +81,25 @@ const PortfolioChart = ({ portfolio, loading }: { portfolio: PortfolioItem[], lo
 
   const onPieLeave = () => {
     setActiveIndex(-1);
+  };
+
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      const isPositive = data.gainLoss >= 0;
+      
+      return (
+        <div className="bg-gray-900/95 backdrop-blur-sm border border-gray-700/50 rounded-xl p-4 shadow-xl">
+          <p className="text-white font-medium mb-1">{data.name}</p>
+          <p className="text-white text-sm mb-1">{data.shares} shares</p>
+          <p className="text-white text-sm mb-1">Value: ${data.value.toLocaleString()}</p>
+          <p className={`text-sm font-medium ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+            {isPositive ? '+' : ''}{data.gainLossPercentage.toFixed(2)}% (${data.gainLoss.toLocaleString()})
+          </p>
+        </div>
+      );
+    }
+    return null;
   };
 
   return (
@@ -111,19 +132,7 @@ const PortfolioChart = ({ portfolio, loading }: { portfolio: PortfolioItem[], lo
               />
             ))}
           </Pie>
-          <Tooltip
-            contentStyle={{
-              backgroundColor: '#1F2937',
-              border: 'none',
-              borderRadius: '0.75rem',
-              color: '#fff',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
-            }}
-            formatter={(value: number, name: string, props: any) => [
-              `$${value.toLocaleString()}`,
-              `${name} (${props.payload.shares} shares)`
-            ]}
-          />
+          <Tooltip content={<CustomTooltip />} />
         </PieChart>
       </ResponsiveContainer>
     </div>
@@ -273,6 +282,17 @@ export default function PortfolioPage() {
     fetchPortfolio();
   }, [profile?.id]);
 
+  // Add handleLogout function
+  const handleLogout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      router.push('/');
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-black">
@@ -351,19 +371,16 @@ export default function PortfolioPage() {
           </div>
         </div>
         
-        {/* Bottom Left Section */}
-        <div className="p-3 border-t border-gray-800/50 flex flex-col gap-3">
-          <a href="/account" className="text-gray-200 hover:text-white text-base flex items-center gap-3 px-3 py-3 rounded-lg bg-gray-800/80 transition-all">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        {/* Replace bottom section with logout button */}
+        <div className="p-3 border-t border-gray-800/50">
+          <button
+            onClick={handleLogout}
+            className="w-full text-gray-300 hover:text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200 flex items-center gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
-            Account
-          </a>
-          <button className="text-gray-200 hover:text-white text-base flex items-center gap-3 px-3 py-3 rounded-lg bg-gray-800/80 transition-all">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7" />
-            </svg>
-            Log out
+            Logout
           </button>
         </div>
       </nav>
@@ -571,6 +588,10 @@ export default function PortfolioPage() {
                     dataKey="date" 
                     stroke="#9CA3AF"
                     tick={{ fill: '#9CA3AF' }}
+                    tickFormatter={(value) => {
+                      const date = new Date(value);
+                      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    }}
                   />
                   <YAxis 
                     stroke="#9CA3AF"
@@ -578,14 +599,34 @@ export default function PortfolioPage() {
                     tickFormatter={(value) => `$${(value/1000).toFixed(1)}k`}
                   />
                   <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: '#1F2937',
-                      border: 'none',
-                      borderRadius: '0.75rem',
-                      color: '#fff',
-                      boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+                    content={({ active, payload, label }) => {
+                      if (active && payload && payload.length) {
+                        const value = payload[0].value as number;
+                        const previousValue = portfolioHistory[portfolioHistory.findIndex(item => item.date === label) - 1]?.value || value;
+                        const change = value - previousValue;
+                        const changePercentage = (change / previousValue) * 100;
+                        const isPositive = change >= 0;
+
+                        return (
+                          <div className="bg-gray-900/95 backdrop-blur-sm border border-gray-700/50 rounded-xl p-4 shadow-xl">
+                            <p className="text-white font-medium mb-1">
+                              {new Date(label).toLocaleDateString('en-US', { 
+                                month: 'short', 
+                                day: 'numeric',
+                                year: 'numeric'
+                              })}
+                            </p>
+                            <p className="text-white text-lg font-bold mb-1">
+                              ${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </p>
+                            <p className={`text-sm font-medium ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+                              {isPositive ? '+' : ''}{changePercentage.toFixed(2)}% (${change.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                            </p>
+                          </div>
+                        );
+                      }
+                      return null;
                     }}
-                    formatter={(value: number) => [`$${value.toFixed(2)}`, 'Portfolio Value']}
                   />
                   <Area
                     type="monotone"
@@ -593,6 +634,7 @@ export default function PortfolioPage() {
                     stroke="#10B981"
                     fillOpacity={1}
                     fill="url(#colorValue)"
+                    strokeWidth={2}
                   />
                 </AreaChart>
               </ResponsiveContainer>

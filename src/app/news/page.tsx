@@ -470,6 +470,36 @@ export default function NewsPage() {
     }
   };
 
+  // Add handleLogout function
+  const handleLogout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      router.push('/');
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
+  };
+
+  // Add function to handle asking CoPilot about an article
+  const handleAskCoPilot = async (article: NewsItem) => {
+    const userMessage = `Please analyze this news article: "${article.title}". What are the key implications for investors and the market?`;
+    setInput(userMessage);
+    
+    // Scroll to the CoPilot section
+    const copilotSection = document.querySelector('.copilot-section');
+    if (copilotSection) {
+      copilotSection.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // Trigger the submit handler
+    const event = new Event('submit', { cancelable: true, bubbles: true });
+    const form = document.querySelector('form');
+    if (form) {
+      form.dispatchEvent(event);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-black">
@@ -544,57 +574,48 @@ export default function NewsPage() {
             </a>
           </div>
         </div>
-        {/* Bottom Left Section */}
-        <div className="p-3 border-t border-gray-800/50 flex flex-col gap-3">
-          <a href="/account" className="text-gray-200 hover:text-white text-base flex items-center gap-3 px-3 py-3 rounded-lg bg-gray-800/80 transition-all">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        {/* Replace bottom section with logout button */}
+        <div className="p-3 border-t border-gray-800/50">
+          <button
+            onClick={handleLogout}
+            className="w-full text-gray-300 hover:text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200 flex items-center gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
-            Account
-          </a>
-          <button className="text-gray-200 hover:text-white text-base flex items-center gap-3 px-3 py-3 rounded-lg bg-gray-800/80 transition-all">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m8.66-13.66l-.71.71M4.05 19.07l-.71.71M21 12h-1M4 12H3m16.66 6.66l-.71-.71M4.05 4.93l-.71-.71" />
-            </svg>
-            Theme
-          </button>
-          <button className="text-gray-200 hover:text-white text-base flex items-center gap-3 px-3 py-3 rounded-lg bg-gray-800/80 transition-all">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7" />
-            </svg>
-            Log out
+            Logout
           </button>
         </div>
       </nav>
 
       {/* Main Content */}
       <div className="flex-1 ml-48 h-screen overflow-y-auto">
-        <div className="flex flex-col items-center p-8 space-y-6 w-full pr-[520px]">
-          {/* Header */}
-          <div className="w-full mb-8 animate-slideUp">
-            <div className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-xl rounded-3xl border border-gray-700/50 p-8 shadow-2xl hover:border-gray-600/50 transition-all duration-500">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-4 h-4 bg-gradient-to-r from-blue-400 to-purple-400 rounded-full animate-pulse"></div>
-                <h1 className="text-4xl font-bold bg-gradient-to-r from-white via-blue-100 to-purple-200 bg-clip-text text-transparent">
+        <div className="flex flex-col items-center p-6 space-y-4 w-full pr-[520px]">
+          {/* Header - Make it more compact */}
+          <div className="w-full mb-4 animate-slideUp">
+            <div className="bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-xl rounded-2xl border border-gray-700/50 p-6 shadow-2xl hover:border-gray-600/50 transition-all duration-500">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-3 h-3 bg-gradient-to-r from-blue-400 to-purple-400 rounded-full animate-pulse"></div>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-white via-blue-100 to-purple-200 bg-clip-text text-transparent">
                   Market News & Analysis
                 </h1>
               </div>
-              <p className="text-gray-300 text-lg mb-6">
+              <p className="text-gray-300 text-base mb-4">
                 Stay updated with the latest financial news, market trends, and expert analysis
               </p>
               
-              {/* Search Bar */}
-              <div className="relative mb-6">
+              {/* Search Bar - Make it more compact */}
+              <div className="relative mb-4">
                 <input
                   type="text"
                   placeholder="Search news, tickers, or topics..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-gray-700/50 text-white rounded-2xl px-6 py-4 pr-12 focus:outline-none focus:ring-2 focus:ring-blue-400 text-lg placeholder-gray-400 border border-gray-600/50 hover:border-gray-500/50 transition-all duration-300"
+                  className="w-full bg-gray-700/50 text-white rounded-xl px-4 py-3 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-400 text-base placeholder-gray-400 border border-gray-600/50 hover:border-gray-500/50 transition-all duration-300"
                 />
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6 absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400"
+                  className="h-5 w-5 absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -603,13 +624,13 @@ export default function NewsPage() {
                 </svg>
               </div>
 
-              {/* Category Filters */}
-              <div className="flex flex-wrap gap-3">
+              {/* Category Filters - Make them more compact */}
+              <div className="flex flex-wrap gap-2">
                 {categories.map((category) => (
                   <button
                     key={category.key}
                     onClick={() => setSelectedCategory(category.key)}
-                    className={`px-6 py-3 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 ${
+                    className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 transform hover:scale-105 ${
                       selectedCategory === category.key
                         ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
                         : 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 hover:text-white border border-gray-600/50'
@@ -622,35 +643,35 @@ export default function NewsPage() {
             </div>
           </div>
 
-          {/* News Grid */}
+          {/* News Grid - Make cards smaller */}
           <div className="w-full">
             {newsLoading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[...Array(6)].map((_, i) => (
-                  <div key={i} className="bg-gray-800/60 backdrop-blur-xl rounded-2xl border border-gray-700/50 p-6 animate-pulse">
-                    <div className="h-4 bg-gray-700 rounded w-3/4 mb-4"></div>
-                    <div className="h-20 bg-gray-700 rounded mb-4"></div>
-                    <div className="h-4 bg-gray-700 rounded w-1/2"></div>
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="bg-gray-800/60 backdrop-blur-xl rounded-xl border border-gray-700/50 p-4 animate-pulse">
+                    <div className="h-3 bg-gray-700 rounded w-3/4 mb-3"></div>
+                    <div className="h-16 bg-gray-700 rounded mb-3"></div>
+                    <div className="h-3 bg-gray-700 rounded w-1/2"></div>
                   </div>
                 ))}
               </div>
             ) : filteredNews.length === 0 ? (
-              <div className="text-center py-16 animate-fadeIn">
-                <div className="text-6xl mb-4">📰</div>
-                <p className="text-gray-400 text-lg mb-2">No news found</p>
-                <p className="text-gray-500">Try adjusting your search or category filter</p>
+              <div className="text-center py-12 animate-fadeIn">
+                <div className="text-5xl mb-3">📰</div>
+                <p className="text-gray-400 text-base mb-2">No news found</p>
+                <p className="text-gray-500 text-sm">Try adjusting your search or category filter</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {filteredNews.map((article, index) => (
                   <div
                     key={index}
-                    className="group bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-xl rounded-2xl border border-gray-700/50 p-6 shadow-xl hover:border-gray-600/50 transition-all duration-500 transform hover:scale-[1.02] hover:shadow-2xl animate-slideUp"
+                    className="group bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-xl rounded-xl border border-gray-700/50 p-4 shadow-xl hover:border-gray-600/50 transition-all duration-500 transform hover:scale-[1.02] hover:shadow-2xl animate-slideUp"
                     style={{ animationDelay: `${index * 0.1}s` }}
                   >
                     {/* Sentiment Badge */}
-                    <div className="flex items-center justify-between mb-4">
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold border ${sentimentColors[article.sentiment]}`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-bold border ${sentimentColors[article.sentiment]}`}>
                         {sentimentLabels[article.sentiment]}
                       </span>
                       <span className="text-xs text-gray-400">{formatTime(article.time)}</span>
@@ -658,11 +679,11 @@ export default function NewsPage() {
 
                     {/* Article Image */}
                     {article.image && (
-                      <div className="mb-4 overflow-hidden rounded-xl">
+                      <div className="mb-3 overflow-hidden rounded-lg">
                         <img
                           src={article.image}
                           alt={article.title}
-                          className="w-full h-40 object-cover group-hover:scale-110 transition-transform duration-500"
+                          className="w-full h-32 object-cover group-hover:scale-110 transition-transform duration-500"
                           onError={(e) => {
                             e.currentTarget.style.display = 'none';
                           }}
@@ -677,31 +698,31 @@ export default function NewsPage() {
                       rel="noopener noreferrer"
                       className="block group/link"
                     >
-                      <h3 className="text-lg font-bold text-white mb-3 line-clamp-3 group-hover/link:text-blue-400 transition-colors duration-300">
+                      <h3 className="text-base font-bold text-white mb-2 line-clamp-2 group-hover/link:text-blue-400 transition-colors duration-300">
                         {article.title}
                       </h3>
                     </a>
 
                     {/* Summary */}
-                    <p className="text-sm text-gray-300 line-clamp-4 leading-relaxed mb-4">
+                    <p className="text-xs text-gray-300 line-clamp-3 leading-relaxed mb-3">
                       {article.summary}
                     </p>
 
                     {/* Tickers */}
                     {article.tickers && article.tickers.length > 0 && (
-                      <div className="mb-4">
-                        <div className="flex flex-wrap gap-2">
-                          {article.tickers.slice(0, 4).map((ticker, i) => (
+                      <div className="mb-3">
+                        <div className="flex flex-wrap gap-1">
+                          {article.tickers.slice(0, 3).map((ticker, i) => (
                             <span
                               key={i}
-                              className="px-2 py-1 bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-300 rounded-lg text-xs font-medium border border-blue-500/30"
+                              className="px-1.5 py-0.5 bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-300 rounded text-xs font-medium border border-blue-500/30"
                             >
                               {ticker}
                             </span>
                           ))}
-                          {article.tickers.length > 4 && (
-                            <span className="px-2 py-1 bg-gray-700/50 text-gray-400 rounded-lg text-xs">
-                              +{article.tickers.length - 4} more
+                          {article.tickers.length > 3 && (
+                            <span className="px-1.5 py-0.5 bg-gray-700/50 text-gray-400 rounded text-xs">
+                              +{article.tickers.length - 3}
                             </span>
                           )}
                         </div>
@@ -709,22 +730,33 @@ export default function NewsPage() {
                     )}
 
                     {/* Footer */}
-                    <div className="flex items-center justify-between pt-4 border-t border-gray-700/50">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-gradient-to-r from-green-400 to-blue-400 rounded-full animate-pulse"></div>
+                    <div className="flex items-center justify-between pt-3 border-t border-gray-700/50">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-1.5 h-1.5 bg-gradient-to-r from-green-400 to-blue-400 rounded-full animate-pulse"></div>
                         <span className="text-xs text-gray-400 font-medium">{article.source}</span>
                       </div>
-                      <a
-                        href={article.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-blue-400 hover:text-blue-300 font-medium transition-colors duration-300 flex items-center gap-1"
-                      >
-                        Read more
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
-                      </a>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleAskCoPilot(article)}
+                          className="text-xs text-purple-400 hover:text-purple-300 font-medium transition-colors duration-300 flex items-center gap-1"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                          </svg>
+                          Ask CoPilot
+                        </button>
+                        <a
+                          href={article.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-400 hover:text-blue-300 font-medium transition-colors duration-300 flex items-center gap-1"
+                        >
+                          Read more
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -735,7 +767,7 @@ export default function NewsPage() {
       </div>
 
       {/* CoPilot Sidebar */}
-      <div className="fixed right-0 top-0 w-[500px] h-screen bg-gradient-to-br from-[#181c2a] via-[#23294a] to-[#1a1d2b] shadow-xl flex flex-col border-l border-gray-700 overflow-y-auto">
+      <div className="fixed right-0 top-0 w-[500px] h-screen bg-gradient-to-br from-[#181c2a] via-[#23294a] to-[#1a1d2b] shadow-xl flex flex-col border-l border-gray-700 overflow-y-auto copilot-section">
         <div className="flex-1 flex flex-col justify-start items-center pt-8">
           <div className="w-full flex flex-col items-center">
             {/* Title */}

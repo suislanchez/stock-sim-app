@@ -369,13 +369,45 @@ export default function PortfolioSection({ profile }: PortfolioSectionProps) {
                   contentStyle={{ 
                     backgroundColor: '#1F2937',
                     border: 'none',
-                    borderRadius: '0.5rem',
-                    color: '#fff'
+                    borderRadius: '0.75rem',
+                    color: '#fff',
+                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                    padding: '1rem'
                   }}
-                  formatter={(value: number, name: string) => [
-                    name === 'value' ? `$${value.toFixed(2)}` : `${value.toFixed(2)}%`,
-                    name === 'value' ? 'Portfolio Value' : 'Gain %'
-                  ]}
+                  content={({ active, payload, label }) => {
+                    if (active && payload && payload.length) {
+                      const value = payload[0].value as number;
+                      const gainPercentage = payload[1]?.value as number;
+                      const previousValue = portfolioHistory[portfolioHistory.findIndex(item => item.date === label) - 1]?.value || value;
+                      const change = value - previousValue;
+                      const changePercentage = (change / previousValue) * 100;
+                      const isPositive = change >= 0;
+
+                      return (
+                        <div className="space-y-2">
+                          <p className="text-white font-medium">
+                            {new Date(label).toLocaleDateString('en-US', { 
+                              month: 'short', 
+                              day: 'numeric',
+                              year: 'numeric'
+                            })}
+                          </p>
+                          <p className="text-white text-lg font-bold">
+                            ${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                          <div className="space-y-1">
+                            <p className={`text-sm font-medium ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+                              Daily Change: {isPositive ? '+' : ''}{changePercentage.toFixed(2)}% (${change.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                            </p>
+                            <p className={`text-sm font-medium ${gainPercentage >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              Total Gain: {gainPercentage >= 0 ? '+' : ''}{gainPercentage.toFixed(2)}%
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
                 />
                 <Area
                   type="monotone"
@@ -421,10 +453,32 @@ export default function PortfolioSection({ profile }: PortfolioSectionProps) {
                     contentStyle={{ 
                       backgroundColor: '#1F2937',
                       border: 'none',
-                      borderRadius: '0.5rem',
-                      color: '#fff'
+                      borderRadius: '0.75rem',
+                      color: '#fff',
+                      boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                      padding: '1rem'
                     }}
-                    formatter={(value: number) => [`$${value.toFixed(2)}`, 'Value']}
+                    content={({ active, payload, label }) => {
+                      if (active && payload && payload.length) {
+                        const value = payload[0].value as number;
+                        const percentage = payload[1]?.value as number;
+
+                        return (
+                          <div className="space-y-2">
+                            <p className="text-white font-medium">
+                              {label}
+                            </p>
+                            <p className="text-white text-lg font-bold">
+                              ${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </p>
+                            <p className="text-white text-sm font-medium">
+                              {percentage.toFixed(1)}%
+                            </p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
                   />
                 </PieChart>
               </ResponsiveContainer>
