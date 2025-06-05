@@ -108,7 +108,7 @@ export default function LoginPage() {
             </svg>
           ),
           title: "30,000+ Assets",
-          description: "Trade stocks, ETFs, mutual funds, and crypto. More assets than most $30/month platforms — completely free.",
+          description: "Trade stocks, ETFs, mutual funds, and crypto. More assets than most paid platforms — completely free.",
           bgColor: "bg-green-500/20"
         },
         {
@@ -117,8 +117,8 @@ export default function LoginPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
             </svg>
           ),
-          title: "AI Trading Assistant",
-          description: "Ask questions like 'Summarize today's market sentiment on my top 3 holdings' using GPT-4o + Claude 3.5.",
+          title: "AI Agent Assistant",
+          description: "Execute orders in natural language. Ask questions like 'Summarize today's market sentiment on my top 3 holdings' using realtime search AI LLM APIs including Perplexity Sonar",
           bgColor: "bg-blue-500/20"
         },
         {
@@ -127,7 +127,7 @@ export default function LoginPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
             </svg>
           ),
-          title: "Built for Beginners",
+          title: "Built for Anyone",
           description: "Perfect for students and young adults. Learn by doing, not by reading 30 Investopedia articles.",
           bgColor: "bg-purple-500/20"
         }
@@ -149,8 +149,8 @@ export default function LoginPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
             </svg>
           ),
-          title: "Futures & Crypto",
-          description: "Practice futures trading, crypto wallet tracking, and DRIP investing with real-time data from free APIs.",
+          title: "Futures & Automated Investing",
+          description: "Practice futures trading, and DRIP investing with real-time data from free tier APIs.",
           bgColor: "bg-yellow-500/20"
         },
         {
@@ -211,8 +211,8 @@ export default function LoginPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
             </svg>
           ),
-          title: "Made with ❤️",
-          description: "Built by students, for students. Own your data locally or use online at simutrader.vercel.app.",
+          title: "Made for You",
+          description: "Built for anyone to use worldwide. Own your data locally or use online at simutrader.vercel.app.",
           bgColor: "bg-pink-500/20"
         }
       ],
