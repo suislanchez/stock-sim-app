@@ -913,7 +913,7 @@ const PortfolioPieChart = ({ portfolio, loading }: { portfolio: PortfolioItem[],
                 right: '100px',
                 }}
               formatter={(value: number, name: string, props: any) => [
-                <div className="text-white">
+                <div key={`tooltip-${name}-${value}`} className="text-white">
                   <div className="font-semibold">${value.toFixed(2)}</div>
                   <div className="text-sm">{name}</div>
                   <div className="text-sm">{props.payload.shares} shares</div>
@@ -2854,18 +2854,18 @@ Provide helpful, accurate financial advice and analysis. Use the portfolio data 
 
       const decoder = new TextDecoder();
       let accumulatedMessage = '';
-      let buffer = '';
-      setThinkingState(null);
+      let accumulatedSources: Array<{ name: string; url: string }> = [];
+      const buffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
         
         // Keep the last incomplete line in the buffer
-        buffer = lines.pop() || '';
+        const buffer = lines.pop() || '';
 
         for (const line of lines) {
           const trimmedLine = line.trim();
@@ -3646,7 +3646,6 @@ Provide helpful, accurate financial advice and analysis. Use the portfolio data 
       const decoder = new TextDecoder();
       let accumulatedMessage = '';
       let accumulatedSources: Array<{ name: string; url: string }> = [];
-      let buffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
