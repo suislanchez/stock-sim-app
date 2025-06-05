@@ -2441,7 +2441,7 @@ export default function DashboardPage() {
     }
   };
 
-  // Add this useEffect to fetch logos for stocks
+  // Add useEffect to fetch logos for stocks
   useEffect(() => {
     const fetchLogos = async () => {
       const symbolsToFetch = showWatchlist 
@@ -2854,7 +2854,7 @@ Provide helpful, accurate financial advice and analysis. Use the portfolio data 
 
       const decoder = new TextDecoder();
       let accumulatedMessage = '';
-      let accumulatedSources: Array<{ name: string; url: string }> = [];
+      const accumulatedSources: Array<{ name: string; url: string }> = [];
       const buffer = '';
 
       while (true) {
