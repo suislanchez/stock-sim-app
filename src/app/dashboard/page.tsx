@@ -24,6 +24,8 @@ interface Profile {
   id: string;
   email: string;
   balance: number;
+  display_name?: string;
+  updated_at?: string;
 }
 
 interface PortfolioItem {
@@ -56,6 +58,18 @@ interface StockData {
     avgVolume: number;
   };
   splitCoefficient?: number;
+  technicalIndicators?: {
+    rsi?: {
+      value: number;
+      trend: 'bullish' | 'bearish' | 'neutral';
+    };
+    macd?: {
+      macd: number;
+      signal: number;
+      histogram: number;
+      trend: 'bullish' | 'bearish' | 'neutral';
+    };
+  };
 }
 
 interface SearchResult {
@@ -1293,6 +1307,14 @@ export default function DashboardPage() {
   const [portfolioHistoryLoading, setPortfolioHistoryLoading] = useState(true);
   const [portfolioNews, setPortfolioNews] = useState<NewsItem[]>([]);
   const [portfolioNewsLoading, setPortfolioNewsLoading] = useState(true);
+  const [isDarkMode, setIsDarkMode] = useState(true);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [displayName, setDisplayName] = useState('');
+  const [isUpdatingName, setIsUpdatingName] = useState(false);
+  const [stockData, setStockData] = useState<StockData | null>(null);
+  const [stockDataLoading, setStockDataLoading] = useState(true);
+  const [showStockInfo, setShowStockInfo] = useState(false);
 
   // Initialize with demo data immediately for better UX
   useEffect(() => {
@@ -1802,10 +1824,11 @@ export default function DashboardPage() {
     setNewsLoading(true);
     
     try {
-      const [stock, detailedData, overview] = await Promise.all([
+      const [stock, detailedData, overview, technicalIndicators] = await Promise.all([
         fetchStock(symbol, timePeriod),
         fetchDetailedStockData(symbol),
-        fetchCompanyOverview(symbol)
+        fetchCompanyOverview(symbol),
+        fetchTechnicalIndicators(symbol)
       ]);
       
       if (stock && detailedData) {
@@ -1814,7 +1837,8 @@ export default function DashboardPage() {
           dailyData: detailedData.dailyData,
           marketData: detailedData.marketData,
           splitCoefficient: detailedData.splitCoefficient,
-          history: detailedData.history
+          history: detailedData.history,
+          technicalIndicators
         };
         
         setStocks(prev => ({
@@ -3930,6 +3954,167 @@ Provide helpful, accurate financial advice and analysis. Use the portfolio data 
     }
   };
 
+  // Theme toggle handler
+  const handleThemeToggle = () => {
+    setIsDarkMode(!isDarkMode);
+    document.documentElement.classList.toggle('dark');
+  };
+
+  // Logout handler
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      // Clear any stored tokens or session data
+      localStorage.removeItem('token');
+      // Redirect to login page
+      router.push('/');  // Changed from '/login' to '/'
+    } catch (error) {
+      console.error('Error during logout:', error);
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
+  // Update name handler
+  const handleUpdateName = async () => {
+    if (!profile?.id) return;
+    
+    setIsUpdatingName(true);
+    try {
+      // First check if the display name is empty
+      if (!displayName.trim()) {
+        throw new Error('Display name cannot be empty');
+      }
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ 
+          display_name: displayName.trim(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', profile.id)
+        .select('id, email, balance, display_name, updated_at')
+        .single();
+      
+      if (error) {
+        console.error('Supabase error:', error);
+        throw new Error(error.message);
+      }
+      
+      if (!data) {
+        throw new Error('No data returned from update');
+      }
+
+      // Update the profile state with the new data
+      setProfile({
+        id: data.id,
+        email: data.email,
+        balance: data.balance,
+        display_name: data.display_name,
+        updated_at: data.updated_at
+      });
+      
+      setShowAccountModal(false);
+    } catch (error) {
+      console.error('Error updating name:', error instanceof Error ? error.message : 'Unknown error');
+      // Show error to user
+      alert(error instanceof Error ? error.message : 'Failed to update display name. Please try again.');
+    } finally {
+      setIsUpdatingName(false);
+    }
+  };
+
+  const fetchTechnicalIndicators = async (symbol: string) => {
+    try {
+      // Fetch RSI data
+      const rsiResponse = await fetch(
+        `https://www.alphavantage.co/query?function=RSI&symbol=${symbol}&interval=daily&time_period=14&series_type=close&apikey=${process.env.NEXT_PUBLIC_ALPHA_VANTAGE_KEY}`
+      )
+      const rsiData = await rsiResponse.json()
+
+      // Fetch MACD data
+      const macdResponse = await fetch(
+        `https://www.alphavantage.co/query?function=MACD&symbol=${symbol}&interval=daily&series_type=close&apikey=${process.env.NEXT_PUBLIC_ALPHA_VANTAGE_KEY}`
+      )
+      const macdData = await macdResponse.json()
+
+      // Process RSI data
+      const rsiValues = Object.entries(rsiData['Technical Analysis: RSI'] || {})
+        .map(([date, data]: [string, any]) => ({
+          date,
+          value: parseFloat(data.RSI)
+        }))
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+      // Process MACD data
+      const macdValues = Object.entries(macdData['Technical Analysis: MACD'] || {})
+        .map(([date, data]: [string, any]) => ({
+          date,
+          macd: parseFloat(data.MACD),
+          signal: parseFloat(data.SIGNAL),
+          histogram: parseFloat(data.HISTOGRAM)
+        }))
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      // Determine trends
+      const latestRSI = rsiValues[0]?.value || 0;
+      const rsiTrend = latestRSI > 70 ? 'bearish' : latestRSI < 30 ? 'bullish' : 'neutral';
+
+      const latestMACD = macdValues[0] || { macd: 0, signal: 0, histogram: 0 };
+      const macdTrend = latestMACD.histogram > 0 ? 'bullish' : latestMACD.histogram < 0 ? 'bearish' : 'neutral';
+
+      return {
+        rsi: {
+          value: latestRSI,
+          trend: rsiTrend as 'bullish' | 'bearish' | 'neutral'
+        },
+        macd: {
+          macd: latestMACD.macd,
+          signal: latestMACD.signal,
+          histogram: latestMACD.histogram,
+          trend: macdTrend as 'bullish' | 'bearish' | 'neutral'
+        }
+      };
+    } catch (error) {
+      console.error('Error fetching technical indicators:', error);
+      return undefined;
+    }
+  };
+
+  // Add useEffect for default stock (AAPL)
+  useEffect(() => {
+    const loadDefaultStock = async () => {
+      try {
+        const [stock, detailedData, technicalIndicators] = await Promise.all([
+          fetchStock('AAPL', timePeriod),
+          fetchDetailedStockData('AAPL'),
+          fetchTechnicalIndicators('AAPL')
+        ]);
+
+        if (stock && detailedData) {
+          const updatedStock: StockData = {
+            ...stock,
+            dailyData: detailedData.dailyData,
+            marketData: detailedData.marketData,
+            splitCoefficient: detailedData.splitCoefficient,
+            history: detailedData.history,
+            technicalIndicators
+          };
+          
+          setStockData(updatedStock);
+          setStocks(prev => ({
+            ...prev,
+            'AAPL': updatedStock
+          }));
+        }
+      } catch (error) {
+        console.error('Error loading default stock:', error);
+      }
+    };
+
+    loadDefaultStock();
+  }, [timePeriod]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-black">
@@ -4006,25 +4191,94 @@ Provide helpful, accurate financial advice and analysis. Use the portfolio data 
         </div>
         {/* Bottom Left Section */}
         <div className="p-3 border-t border-gray-800/50 flex flex-col gap-3">
-          <a href="/account" className="text-gray-200 hover:text-white text-base flex items-center gap-3 px-3 py-3 rounded-lg bg-gray-800/80 transition-all">
+          <button 
+            onClick={() => setShowAccountModal(true)}
+            className="text-gray-200 hover:text-white text-base flex items-center gap-3 px-3 py-3 rounded-lg bg-gray-800/80 transition-all group"
+          >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
             Account
-          </a>
-          <button className="text-gray-200 hover:text-white text-base flex items-center gap-3 px-3 py-3 rounded-lg bg-gray-800/80 transition-all">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m8.66-13.66l-.71.71M4.05 19.07l-.71.71M21 12h-1M4 12H3m16.66 6.66l-.71-.71M4.05 4.93l-.71-.71" />
-            </svg>
-            Theme
           </button>
-          <button className="text-gray-200 hover:text-white text-base flex items-center gap-3 px-3 py-3 rounded-lg bg-gray-800/80 transition-all">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7" />
+          <button 
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="text-gray-200 hover:text-white text-base flex items-center gap-3 px-3 py-3 rounded-lg bg-gray-800/80 transition-all group"
+          >
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              className="h-6 w-6 transform transition-transform duration-300 group-hover:translate-x-1" 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth="2" 
+                d="M17 16l4-4m0 0l-4-4m4 4H7" 
+              />
             </svg>
-            Log out
+            {isLoggingOut ? 'Logging out...' : 'Log out'}
           </button>
         </div>
+
+        {/* Account Modal */}
+        {showAccountModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-gray-800 rounded-lg p-3 w-[240px] mx-4 border border-gray-700/50">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-sm font-medium text-white">Account Settings</h3>
+                <button
+                  onClick={() => setShowAccountModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              <div className="space-y-2">
+                <div>
+                  <label className="block text-gray-300 text-xs font-medium mb-1">
+                    Display Name
+                  </label>
+                  <input
+                    type="text"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    className="w-full bg-gray-700/50 border border-gray-600/50 rounded-md px-2 py-1.5 text-sm text-white placeholder-gray-400 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all"
+                    placeholder="Enter name"
+                  />
+                </div>
+                
+                <div className="flex justify-end gap-2 mt-3">
+                  <button
+                    onClick={() => setShowAccountModal(false)}
+                    className="px-2 py-1 text-xs text-gray-300 hover:text-white transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleUpdateName}
+                    disabled={isUpdatingName}
+                    className="px-2 py-1 text-xs bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                  >
+                    {isUpdatingName ? (
+                      <>
+                        <div className="animate-spin rounded-full h-2.5 w-2.5 border-b-2 border-white"></div>
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      'Save'
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* Main Content */}
@@ -4042,7 +4296,7 @@ Provide helpful, accurate financial advice and analysis. Use the portfolio data 
                 <div className="flex items-center gap-3 mb-6">
                   <div className="w-3 h-3 bg-gradient-to-r from-green-400 to-blue-400 rounded-full animate-pulse"></div>
                   <h1 className="text-2xl font-bold bg-gradient-to-r from-white via-blue-100 to-blue-200 bg-clip-text text-transparent">
-                    Welcome back, {profile?.email}
+                    Welcome back, {profile?.display_name || profile?.email}
                   </h1>
                 </div>
                 <div className="space-y-6">
@@ -5201,19 +5455,62 @@ Provide helpful, accurate financial advice and analysis. Use the portfolio data 
                       </h4>
                       <InfoBubble title="Technical Indicators" content={sectionInfo.technical} />
                     </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-400">RSI (14)</span>
-                        <span className="text-sm font-semibold text-yellow-400">58.2</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-400">MACD</span>
-                        <span className="text-sm font-semibold text-cyan-400">2.5</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-400">Moving Avg (50)</span>
-                        <span className="text-sm font-semibold text-emerald-400">${stocks[selectedStock].price.toFixed(2)}</span>
-                      </div>
+                    <div className="space-y-4">
+                      {/* RSI */}
+                      {stockData?.technicalIndicators?.rsi && (
+                        <div className="bg-gray-900/50 rounded-lg p-3">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-sm font-medium text-gray-300">RSI (14)</span>
+                            <span className={`text-sm font-medium ${
+                              stockData.technicalIndicators.rsi.trend === 'bullish' ? 'text-green-400' :
+                              stockData.technicalIndicators.rsi.trend === 'bearish' ? 'text-red-400' :
+                              'text-gray-400'
+                            }`}>
+                              {stockData.technicalIndicators.rsi.value.toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full ${
+                                stockData.technicalIndicators.rsi.trend === 'bullish' ? 'bg-green-500' :
+                                stockData.technicalIndicators.rsi.trend === 'bearish' ? 'bg-red-500' :
+                                'bg-gray-500'
+                              }`}
+                              style={{ width: `${Math.min(100, Math.max(0, stockData.technicalIndicators.rsi.value))}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* MACD */}
+                      {stockData?.technicalIndicators?.macd && (
+                        <div className="bg-gray-900/50 rounded-lg p-3">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-sm font-medium text-gray-300">MACD</span>
+                            <span className={`text-sm font-medium ${
+                              stockData.technicalIndicators.macd.trend === 'bullish' ? 'text-green-400' :
+                              stockData.technicalIndicators.macd.trend === 'bearish' ? 'text-red-400' :
+                              'text-gray-400'
+                            }`}>
+                              {stockData.technicalIndicators.macd.macd.toFixed(4)}
+                            </span>
+                          </div>
+                          <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full ${
+                                stockData.technicalIndicators.macd.trend === 'bullish' ? 'bg-green-500' :
+                                stockData.technicalIndicators.macd.trend === 'bearish' ? 'bg-red-500' :
+                                'bg-gray-500'
+                              }`}
+                              style={{ 
+                                width: `${Math.min(100, Math.max(0, 
+                                  (stockData.technicalIndicators.macd.histogram + 1) * 50
+                                ))}%` 
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
