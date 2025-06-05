@@ -72,21 +72,6 @@ export default function LoginPage() {
 
       if (error) throw error;
 
-      if (isSignUp && data.user) {
-        // Create a profile for new users
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert([
-            {
-              id: data.user.id,
-              email: data.user.email,
-              balance: 10000.00 // Starting balance
-            }
-          ]);
-
-        if (profileError) throw profileError;
-      }
-
       router.push("/dashboard");
     } catch (err: any) {
       setError(err.message);
