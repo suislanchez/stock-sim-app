@@ -78,8 +78,11 @@ export default function LoginPage() {
 
         if (error) throw error;
 
-        // Redirect to confirmation page instead of showing message
-        router.push("/auth/confirmation");
+        // Show success message and switch to login view
+        setSuccessMessage("Please check your email for the activation link. After activating, you can log in.");
+        setIsSignUp(false); // Switch to login view
+        setEmail(""); // Clear email
+        setPassword(""); // Clear password
         return;
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
