@@ -5,12 +5,13 @@
 
 ---
 
-## Features
-![Uploading Screenshot 2025-06-04 at 9.52.50 PM.png…]()<img width="1620" alt="Screenshot 2025-06-04 at 9 58 41 PM" src="https://github.com/user-attachments/assets/9e311840-0e1e-4091-9495-d715c05ff024" />
+## Features Preview
 
+<img width="1599" alt="Screenshot 2025-06-04 at 9 52 50 PM" src="https://github.com/user-attachments/assets/a5201d39-0da0-4b51-8d76-1e9df6d0c516" />
+<img width="1620" alt="Screenshot 2025-06-04 at 9 58 41 PM" src="https://github.com/user-attachments/assets/0a562050-3a96-4cc6-9f19-19a158ed5e7a" />
+<img width="1607" alt="Screenshot 2025-06-04 at 9 59 33 PM" src="https://github.com/user-attachments/assets/47aaa286-88b1-4f0d-8e3e-912997e799e9" />
+<img width="1600" alt="Screenshot 2025-06-04 at 10 01 40 PM" src="https://github.com/user-attachments/assets/266a9884-e0e2-40ba-8ae0-2cc73a9d1d4e" />
 
-- Simulates trading across 30,000+ equities (stocks, ETFs, mutual funds) and 2,000+ cryptocurrencies<img width="1607" alt="Screenshot 2025-06-04 at 9 59 33 PM" src="https://github.com/user<img width="1607" alt="Screenshot 2025-06-08 at 9 00 08 PM" src="https://github.com/user-attachments/assets/e3db252f-beae-4259-a39d-745ed087e99b" />
--attachments/assets/3da65cbd-4692-449e-99e7-1d54a76f8974" />
 
 - Built-in support for futures, crypto wallet tracking, and DRIP investing and more
 - Integrated RAG (Retrieval-Augmented Generation) system using GPT-4o and Claude 3.5 to respond to natural language queries and execute simulated trades
