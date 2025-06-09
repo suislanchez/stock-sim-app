@@ -32,6 +32,10 @@ This app runs entirely on your machine, is free to modify, and offers a clean, m
 
 ---
 
+NOTE:
+
+you need open ai api key, (or perplexity sonar api key) as well as alphavantage api key for using. free tiers available for all of these btw.
+
 ## Getting Started
 
 Clone the repository:
