@@ -1,14 +1,17 @@
 # SimuTrader AI - All of stocks and crypto, your trusted real time simulator
 
-![SimuTrader Preview](public/simu-preview.png)
 
 **SimuTrader AI** is a fully local, real-time trading simulator for exploring markets, portfolio strategy, and AI-assisted investing. Built to be modern, educational, and completely free of ads or paywalls.
 
 ---
 
 ## Features
+![Uploading Screenshot 2025-06-04 at 9.52.50 PM.png…]()<img width="1620" alt="Screenshot 2025-06-04 at 9 58 41 PM" src="https://github.com/user-attachments/assets/9e311840-0e1e-4091-9495-d715c05ff024" />
 
-- Simulates trading across 30,000+ equities (stocks, ETFs, mutual funds) and 2,000+ cryptocurrencies
+
+- Simulates trading across 30,000+ equities (stocks, ETFs, mutual funds) and 2,000+ cryptocurrencies<img width="1607" alt="Screenshot 2025-06-04 at 9 59 33 PM" src="https://github.com/user<img width="1607" alt="Screenshot 2025-06-08 at 9 00 08 PM" src="https://github.com/user-attachments/assets/e3db252f-beae-4259-a39d-745ed087e99b" />
+-attachments/assets/3da65cbd-4692-449e-99e7-1d54a76f8974" />
+
 - Built-in support for futures, crypto wallet tracking, and DRIP investing and more
 - Integrated RAG (Retrieval-Augmented Generation) system using GPT-4o and Claude 3.5 to respond to natural language queries and execute simulated trades
 - Automated risk management: stop-losses, portfolio rebalancing, and diversification metrics
